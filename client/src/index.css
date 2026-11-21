@@ -86,6 +86,24 @@ body {
   animation: holoSheen 6.5s ease-in-out infinite;
 }
 
+@keyframes amberGlowPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 22px 4px rgba(244, 156, 59, 0.42),
+      0 0 0 2px rgba(244, 156, 59, 0.85);
+  }
+  50% {
+    box-shadow:
+      0 0 38px 10px rgba(244, 156, 59, 0.68),
+      0 0 0 3px rgba(244, 156, 59, 1);
+  }
+}
+
+.level-up-amber-glow {
+  animation: amberGlowPulse 1.15s ease-in-out infinite;
+}
+
 /* Scrollbar discreta en tonos de la paleta */
 ::-webkit-scrollbar {
   width: 8px;
@@ -113,5 +131,11 @@ body {
   .animate-dash-flow,
   .animate-holo-sheen {
     animation: none;
+  }
+  .level-up-amber-glow {
+    animation: none;
+    box-shadow:
+      0 0 28px 6px rgba(244, 156, 59, 0.52),
+      0 0 0 2px rgba(244, 156, 59, 0.95);
   }
 }

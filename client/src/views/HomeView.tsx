@@ -100,7 +100,7 @@ export function HomeView({
               }}
               placeholder="Tu nickname..."
               aria-label="Nickname del jugador"
-              className="w-full rounded-md border border-surface bg-base/80 px-2.5 py-1 font-mono text-xs text-ink transition focus:border-accent focus:outline-none"
+              className="w-full rounded-md border border-surface bg-base/80 px-2.5 py-1 font-mono text-[16px] text-ink transition focus:border-accent focus:outline-none sm:text-xs"
             />
           </label>
 

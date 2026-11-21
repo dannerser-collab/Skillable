@@ -156,38 +156,62 @@ export class ArenaManager {
     return this.rooms.size;
   }
 
+  /**
+   * setTimeout blindado: una excepción dentro de un timer tumbaría el proceso de Node
+   * (y la demo). Aquí se registra y la sala sigue viva.
+   */
+  private later(fn: () => void | Promise<void>, ms: number): Timer {
+    return setTimeout(() => {
+      try {
+        const out = fn();
+        if (out instanceof Promise) out.catch((err) => console.error('[arena] timer async falló:', err));
+      } catch (err) {
+        console.error('[arena] timer falló:', err);
+      }
+    }, ms);
+  }
+
   /* ── registro de eventos ─────────────────────────────────────────────── */
 
   private attach(socket: ArenaSocket): void {
+    /** Responde al ack solo si el cliente lo envió (un emit sin callback no debe romper nada). */
+    const reply = <T,>(ack: unknown, res: AckResponse<T>) => {
+      if (typeof ack !== 'function') return;
+      try {
+        (ack as (r: AckResponse<T>) => void)(res);
+      } catch (err) {
+        console.error('[arena] ack falló:', err);
+      }
+    };
     const guard =
       <A extends unknown[]>(fn: (...args: A) => void) =>
       (...args: A) => {
         try {
           fn(...args);
         } catch (err) {
-          const ack = args.find((a): a is (res: AckResponse<never>) => void => typeof a === 'function');
+          const ack = args.find((a) => typeof a === 'function');
           const code = err instanceof ArenaError ? err.code : undefined;
-          const message = err instanceof Error ? err.message : 'Error inesperado';
+          const message = err instanceof ArenaError ? err.message : 'Error inesperado en la sala.';
           if (!(err instanceof ArenaError)) console.error('[arena]', err);
-          if (ack) ack({ ok: false, error: message, ...(code ? { code } : {}) });
-          else socket.emit('room:error', { message, ...(code ? { code } : {}) });
+          if (ack) reply(ack, { ok: false, error: message, ...(code ? { code } : {}) });
+          else if (socket.connected) socket.emit('room:error', { message, ...(code ? { code } : {}) });
         }
       };
 
-    socket.on('room:create', guard((payload, ack) => ack({ ok: true, data: this.createRoom(socket, payload) })));
-    socket.on('room:join', guard((payload, ack) => ack({ ok: true, data: this.joinRoom(socket, payload) })));
-    socket.on('room:addBot', guard((payload, ack) => ack({ ok: true, data: this.addBot(socket, payload) })));
-    socket.on('duel:quickBot', guard((payload, ack) => ack({ ok: true, data: this.quickBot(socket, payload) })));
+    socket.on('room:create', guard((payload, ack) => reply(ack, { ok: true, data: this.createRoom(socket, payload) })));
+    socket.on('room:join', guard((payload, ack) => reply(ack, { ok: true, data: this.joinRoom(socket, payload) })));
+    socket.on('room:addBot', guard((payload, ack) => reply(ack, { ok: true, data: this.addBot(socket, payload) })));
+    socket.on('duel:quickBot', guard((payload, ack) => reply(ack, { ok: true, data: this.quickBot(socket, payload) })));
     socket.on('room:ready', guard(() => this.markReady(socket)));
     socket.on('duel:typing', guard((isTyping) => this.typing(socket, isTyping)));
     socket.on('duel:submit', guard((payload, ack) => {
       this.submit(socket, payload);
-      ack({ ok: true, data: undefined });
+      reply(ack, { ok: true, data: undefined });
     }));
     socket.on('duel:nextRound', guard(() => this.voteNext(socket)));
-    socket.on('duel:rematch', guard((ack) => ack({ ok: true, data: this.rematch(socket) })));
+    socket.on('duel:rematch', guard((ack) => reply(ack, { ok: true, data: this.rematch(socket) })));
     socket.on('room:leave', guard(() => this.leave(socket, true)));
-    socket.on('disconnect', () => this.leave(socket, false));
+    socket.on('disconnect', guard(() => this.leave(socket, false)));
   }
 
   /* ── utilidades de sala ──────────────────────────────────────────────── */
@@ -317,7 +341,8 @@ export class ArenaManager {
   private sweep(): void {
     const now = Date.now();
     for (const room of this.rooms.values()) {
-      if (now - room.lastActivity > ROOM_TTL_MS || this.connectedHumans(room).length === 0) this.destroy(room);
+      const abandoned = this.connectedHumans(room).length === 0 && now - room.lastActivity > RECONNECT_WINDOW_MS;
+      if (now - room.lastActivity > ROOM_TTL_MS || abandoned) this.destroy(room);
     }
   }
 
@@ -353,7 +378,9 @@ export class ArenaManager {
     // Reconexión: recuperar un slot humano desconectado con el mismo nickname.
     const reclaim = SLOTS.find((s) => {
       const p = players[s];
-      return p && !p.isBot && !p.connected && normalize(p.nickname) === normalize(identity.nickname);
+      // `connected` puede seguir en true si el socket viejo aún no disparó 'disconnect' (recarga rápida).
+      const stale = !p?.connected || !this.io.sockets.sockets.get(p.id)?.connected;
+      return p && !p.isBot && stale && normalize(p.nickname) === normalize(identity.nickname);
     });
     if (reclaim) {
       this.leave(socket, true);
@@ -366,12 +393,17 @@ export class ArenaManager {
       room.cleanupTimer = null;
       this.bindSocket(socket, room, reclaim, player.nickname);
       this.emitActivity(room, reclaim, player.activity);
-      this.emitState(room);
+      this.resume(room);
       return { code, slot: reclaim, state: publicState(room.state) };
     }
 
     if (phase !== 'waiting') {
       throw new ArenaError(phase === 'ready' ? 'La sala está llena.' : 'La sala ya está en duelo.', 'ROOM_FULL');
+    }
+    // En la sala de espera, el slot de alguien que se cayó y no volvió se libera para el recién llegado.
+    for (const s of SLOTS) {
+      const p = players[s];
+      if (p && !p.isBot && !p.connected) delete players[s];
     }
     const slot = SLOTS.find((s) => !players[s]);
     if (!slot) throw new ArenaError('La sala está llena.', 'ROOM_FULL');
@@ -379,7 +411,9 @@ export class ArenaManager {
     this.leave(socket, true);
     players[slot] = this.humanPlayer(socket, slot, identity);
     this.bindSocket(socket, room, slot, identity.nickname);
-    if (players[other(slot)]) this.enterReady(room);
+    if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
+    room.cleanupTimer = null;
+    if (players[other(slot)]?.connected) this.enterReady(room);
     else this.emitState(room);
     return { code, slot, state: publicState(room.state) };
   }
@@ -419,7 +453,7 @@ export class ArenaManager {
         p.activity = p.connected ? 'idle' : 'disconnected';
       }
     }
-    room.phaseTimer = setTimeout(() => this.startRound(room, 1), READY_COUNTDOWN_SEC * 1000);
+    room.phaseTimer = this.later(() => this.startRound(room, 1), READY_COUNTDOWN_SEC * 1000);
     this.emitState(room);
   }
 
@@ -469,7 +503,7 @@ export class ArenaManager {
     this.io.to(room.state.code).emit('duel:roundStart', publicRound(round));
     this.emitState(room);
 
-    room.roundTimer = setTimeout(() => void this.closeRound(room), DUEL_ROUND_SEC * 1000 + SUBMIT_GRACE_MS);
+    room.roundTimer = this.later(() => this.closeRound(room), DUEL_ROUND_SEC * 1000 + SUBMIT_GRACE_MS);
     for (const s of SLOTS) {
       const p = room.state.players[s];
       if (p?.isBot) this.scheduleBot(room, round, s, p.botDifficulty ?? 'novato');
@@ -481,15 +515,21 @@ export class ArenaManager {
   }
 
   private scheduleBot(room: Room, round: DuelRound, slot: PlayerSlot, difficulty: BotDifficulty): void {
-    const plan = planBotAnswer(round.challenge, difficulty);
+    const emergency = `Uso «${round.challenge.targetWord.toLowerCase()}» y que el árbitro decida.`;
+    let plan: ReturnType<typeof planBotAnswer>;
+    try {
+      plan = planBotAnswer(round.challenge, difficulty);
+    } catch (err) {
+      console.error('[arena] el bot no pudo planificar su respuesta:', err);
+      plan = { typingAfterMs: 1_000, submitAfterMs: 6_000, text: Promise.resolve(emergency) };
+    }
     room.botTimers.push(
-      setTimeout(() => {
+      this.later(() => {
         if (this.isLive(room, round) && !round.submissions[slot]) this.emitActivity(room, slot, 'typing');
       }, plan.typingAfterMs),
-      setTimeout(() => {
-        void plan.text.then((text) => {
-          if (this.isLive(room, round) && !round.submissions[slot]) this.record(room, round, slot, text);
-        });
+      this.later(async () => {
+        const text = await plan.text.catch(() => emergency);
+        if (this.isLive(room, round) && !round.submissions[slot]) this.record(room, round, slot, text || emergency);
       }, plan.submitAfterMs),
     );
   }
@@ -527,11 +567,13 @@ export class ArenaManager {
   private maybeClose(room: Room): void {
     const round = this.currentRound(room);
     if (room.state.phase !== 'round' || !round) return;
+    // Ningún humano conectado (p.ej. recargando la pestaña): decide el reloj de la ronda, no el bot.
+    if (this.connectedHumans(room).length === 0) return;
     const done = SLOTS.every((s) => {
       const p = room.state.players[s];
       return !p || !p.connected || !!round.submissions[s];
     });
-    if (done) void this.closeRound(room);
+    if (done) this.closeRound(room).catch((err) => console.error('[arena] closeRound falló:', err));
   }
 
   private async closeRound(room: Room): Promise<void> {
@@ -570,7 +612,23 @@ export class ArenaManager {
     }
     this.io.to(room.state.code).emit('duel:roundResult', round);
     this.emitState(room);
-    room.phaseTimer = setTimeout(() => this.advance(room), VERDICT_AUTOADVANCE_SEC * 1000);
+    this.armVerdictTimer(room);
+  }
+
+  /** Auto-avance del veredicto; queda en pausa si no hay humanos conectados. */
+  private armVerdictTimer(room: Room): void {
+    this.clearPhaseTimer(room);
+    if (this.connectedHumans(room).length === 0) return;
+    room.phaseTimer = this.later(() => this.advance(room), VERDICT_AUTOADVANCE_SEC * 1000);
+  }
+
+  /** Un jugador volvió: re-arma lo que había quedado en pausa. */
+  private resume(room: Room): void {
+    const { state } = room;
+    if (state.phase === 'waiting' && SLOTS.every((s) => state.players[s]?.connected)) return this.enterReady(room);
+    this.emitState(room);
+    if (state.phase === 'verdict' && !room.phaseTimer) this.armVerdictTimer(room);
+    else if (state.phase === 'round') this.maybeClose(room);
   }
 
   private voteNext(socket: ArenaSocket): void {
@@ -589,6 +647,7 @@ export class ArenaManager {
   private advance(room: Room): void {
     if (room.state.phase !== 'verdict' || !this.rooms.has(room.state.code)) return;
     this.clearPhaseTimer(room);
+    if (this.connectedHumans(room).length === 0) return; // se reanuda en resume()
     const next = room.state.currentRoundIndex + 2;
     if (next <= DUEL_ROUNDS) this.startRound(room, next as 1 | 2 | 3);
     else this.finish(room);
@@ -648,23 +707,34 @@ export class ArenaManager {
     const { state } = room;
     if (state.phase === 'waiting' || state.phase === 'ready') {
       this.clearPhaseTimer(room);
-      delete state.players[slot];
-      if (this.connectedHumans(room).length === 0) return this.destroy(room);
       for (const p of Object.values(state.players)) if (p) p.ready = p.isBot;
       state.phase = 'waiting';
-      this.emitState(room);
-      return;
+      const othersHere = SLOTS.some((s) => {
+        const p = state.players[s];
+        return s !== slot && !!p && !p.isBot && p.connected;
+      });
+      if (explicit || othersHere) {
+        // Salida voluntaria, o queda otro humano esperando: se libera el slot.
+        delete state.players[slot];
+        if (this.connectedHumans(room).length === 0) return this.destroy(room);
+        this.emitState(room);
+        return;
+      }
+      // Era el último humano y se cayó (recarga): se guarda su slot durante la ventana de reconexión.
     }
 
     player.connected = false;
+    player.activity = 'disconnected';
     this.emitActivity(room, slot, 'disconnected');
     if (this.connectedHumans(room).length === 0) {
       if (state.phase === 'finished') return this.destroy(room);
       // Ventana para recargar la pestaña / volver desde el celular.
       if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
-      room.cleanupTimer = setTimeout(() => {
-        if (this.connectedHumans(room).length === 0) this.destroy(room);
+      room.cleanupTimer = this.later(() => {
+        if (this.rooms.get(state.code) === room && this.connectedHumans(room).length === 0) this.destroy(room);
       }, RECONNECT_WINDOW_MS);
+      // Pausa el auto-avance del veredicto hasta que alguien vuelva.
+      if (state.phase === 'verdict') this.clearPhaseTimer(room);
     }
     this.emitState(room);
     if (state.phase === 'round') this.maybeClose(room);

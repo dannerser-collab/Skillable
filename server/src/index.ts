@@ -142,6 +142,10 @@ export const io = new Server<ClientToServerEvents, ServerToClientEvents, InterSe
 
 const arena = new ArenaManager(io);
 
+// Red de seguridad para la demo en vivo: un error inesperado se registra, no tumba el servidor.
+process.on('unhandledRejection', (reason) => console.error('[skillable] promesa rechazada sin manejar:', reason));
+process.on('uncaughtException', (err) => console.error('[skillable] excepción no capturada:', err));
+
 httpServer.listen(PORT, () => {
   console.log(`[skillable] server listo en http://localhost:${PORT}`);
   console.log(

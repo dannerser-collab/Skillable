@@ -87,17 +87,17 @@ export function Navbar({
 
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-surface/80 bg-base/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2.5 sm:px-6">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-2 sm:gap-3 sm:px-6 sm:py-2.5">
         {/* Logo */}
         <button
           type="button"
           onClick={() => onNavigate('inicio')}
-          className="group flex shrink-0 items-center gap-2.5 text-left focus:outline-none"
+          className="group flex shrink-0 items-center gap-2 text-left focus:outline-none sm:gap-2.5"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-accent/45 bg-accent/15 font-display text-sm font-bold text-accent transition group-hover:border-accent group-hover:bg-accent/25">
+          <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-accent/45 bg-accent/15 font-display text-xs font-bold text-accent transition group-hover:border-accent group-hover:bg-accent/25 sm:h-8 sm:w-8 sm:text-sm">
             SK
           </span>
-          <span className="font-display text-[1rem] font-bold tracking-[0.18em] text-ink sm:text-lg">
+          <span className="font-display text-sm font-bold tracking-[0.14em] text-ink sm:text-lg sm:tracking-[0.18em]">
             SKILLABLE
           </span>
         </button>
@@ -126,7 +126,7 @@ export function Navbar({
         </nav>
 
         {/* Indicadores derecha + Demo Presets */}
-        <div className="flex items-center gap-2 sm:gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           {/* Nickname editable */}
           <div className="hidden items-center sm:flex">
             {editingNick ? (
@@ -173,17 +173,17 @@ export function Navbar({
 
           {/* ELO */}
           <div
-            className="flex items-center gap-1 rounded-lg border border-surface bg-surface/35 px-2.5 py-1 font-mono text-xs"
+            className="flex items-center gap-1 rounded-lg border border-surface bg-surface/35 px-2 py-1 font-mono text-[11px] sm:px-2.5 sm:text-xs"
             title="Puntaje ELO en Arena 1v1"
           >
-            <Trophy className="h-3.5 w-3.5 text-accent" />
+            <Trophy className="h-3 w-3 text-accent sm:h-3.5 sm:w-3.5" />
             <span className="font-semibold text-ink">{elo}</span>
             <span className="hidden text-secondary lg:inline">ELO</span>
           </div>
 
           {/* Contador de skills */}
           <div
-            className="flex items-center gap-1 rounded-lg border border-surface bg-surface/35 px-2.5 py-1 font-mono text-xs"
+            className="flex items-center gap-1 rounded-lg border border-surface bg-surface/35 px-2 py-1 font-mono text-[11px] sm:px-2.5 sm:text-xs"
             title="Skills desbloqueadas"
           >
             <span className="font-semibold text-accent">{unlockedCount}</span>
@@ -195,7 +195,8 @@ export function Navbar({
             <button
               type="button"
               onClick={() => setPresetOpen((prev) => !prev)}
-              className="flex items-center gap-1.5 rounded-lg border border-surface bg-base/80 px-2.5 py-1 text-xs font-medium text-secondary transition hover:border-accent/50 hover:text-ink"
+              aria-label="Demo Presets"
+              className="flex items-center gap-1.5 rounded-lg border border-surface bg-base/80 px-2 py-1 text-xs font-medium text-secondary transition hover:border-accent/50 hover:text-ink sm:px-2.5"
             >
               <Wrench className="h-3.5 w-3.5 text-accent" />
               <span className="hidden sm:inline">Demo Presets</span>
@@ -208,42 +209,36 @@ export function Navbar({
             )}
 
             {presetOpen && (
-              <div className="glass-panel absolute right-0 top-full z-50 mt-2 w-64 rounded-xl p-2 shadow-2xl">
+              <div className="glass-panel absolute right-0 top-full z-50 mt-2 w-64 max-w-[calc(100vw-1.5rem)] rounded-xl p-2 shadow-2xl">
                 <p className="px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-secondary">
-                  Estado rápido para pitch
+                  Demo Presets (1 clic)
                 </p>
                 <button
                   type="button"
-                  onClick={() => triggerPreset('pitch', 'Preset Pitch aplicado')}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-ink transition hover:bg-surface/60"
+                  onClick={() => triggerPreset('demo', 'Estado Demo cargado (3/15)')}
+                  className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs text-ink transition hover:bg-surface/60"
                 >
-                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent" />
-                  <span>Demo Pitch (4/15 + 1 Oxidada)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => triggerPreset('starter_rusty', 'Preset Inicial aplicado')}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-ink transition hover:bg-surface/60"
-                >
-                  <Wrench className="h-3.5 w-3.5 shrink-0 text-danger" />
-                  <span>Inicial (Paradigma Oxidada)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => triggerPreset('toggle_rusty', 'Estado Oxidada alternado')}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-ink transition hover:bg-surface/60"
-                >
-                  <GitBranch className="h-3.5 w-3.5 shrink-0 text-secondary" />
-                  <span>Alternar Oxidada (Paradigma)</span>
+                  <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" />
+                  <div>
+                    <p className="font-semibold text-ink">Cargar estado Demo</p>
+                    <p className="font-mono text-[10px] text-secondary">
+                      2 dominadas (Nv.3) + 1 Oxidada
+                    </p>
+                  </div>
                 </button>
                 <div className="my-1 border-t border-surface/80" />
                 <button
                   type="button"
-                  onClick={() => triggerPreset('reset', 'Progreso reiniciado (0/15)')}
-                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs text-danger transition hover:bg-danger/10"
+                  onClick={() => triggerPreset('reset', 'Todo reseteado (0/15)')}
+                  className="flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs text-danger transition hover:bg-danger/10"
                 >
-                  <RotateCcw className="h-3.5 w-3.5 shrink-0" />
-                  <span>Resetear progreso (0/15)</span>
+                  <RotateCcw className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-danger">Resetear todo</p>
+                    <p className="font-mono text-[10px] text-secondary">
+                      Reinicia skills (0/15) y ELO 1000
+                    </p>
+                  </div>
                 </button>
               </div>
             )}
@@ -253,23 +248,24 @@ export function Navbar({
 
       {/* Pestañas móvil */}
       <nav
-        className="flex items-center justify-around border-t border-surface/60 px-2 py-1.5 md:hidden"
+        className="flex items-center justify-around border-t border-surface/60 px-1.5 py-1.5 md:hidden"
         aria-label="Navegación móvil"
       >
         {NAV_TABS.map((tab) => {
           const Icon = tab.icon;
           const active = activeView === tab.id;
+          const mobileLabel = tab.id === 'arbol' ? 'Árbol' : tab.label;
           return (
             <button
               key={tab.id}
               type="button"
               onClick={() => onNavigate(tab.id)}
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+              className={`flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-medium transition ${
                 active ? 'bg-accent/15 text-accent' : 'text-secondary hover:text-ink'
               }`}
             >
-              <Icon className="h-3.5 w-3.5" />
-              <span>{tab.label}</span>
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span>{mobileLabel}</span>
             </button>
           );
         })}

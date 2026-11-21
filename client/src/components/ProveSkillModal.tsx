@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import confetti from 'canvas-confetti';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -15,7 +14,6 @@ import {
   XCircle,
 } from 'lucide-react';
 import {
-  MAX_SKILL_LEVEL,
   type Challenge,
   type JudgeResponse,
   type Skill,
@@ -54,7 +52,7 @@ export function ProveSkillModal({
     sentence: string,
     response: JudgeResponse,
   ) => void;
-  onClaimLevelUp: (skill: Skill) => void;
+  onClaimLevelUp: (skill: Skill, achievedLevel: Exclude<SkillLevel, 0>) => void;
 }) {
   const [attemptSeed, setAttemptSeed] = useState(0);
   const challenge = useMemo(
@@ -146,20 +144,12 @@ export function ProveSkillModal({
   };
 
   const handleClaim = () => {
-    if (targetLevel === MAX_SKILL_LEVEL) {
-      confetti({
-        particleCount: 75,
-        spread: 65,
-        origin: { y: 0.6 },
-        colors: ['#f49c3b', '#f7f2ec', '#7b8794', '#4ade80'],
-      });
-    }
-    onClaimLevelUp(skill);
+    onClaimLevelUp(skill, targetLevel);
   };
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-base/90 p-4 backdrop-blur-lg"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-base/90 p-3 backdrop-blur-lg sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`Prove Skill ${skill.word}`}
@@ -299,7 +289,7 @@ export function ProveSkillModal({
                 disabled={submitting || timeExpired}
                 onChange={(e) => setSentence(e.target.value)}
                 placeholder={`Escribe una frase ingeniosa usando "${skill.word}" en contexto real...`}
-                className={`w-full resize-none rounded-2xl border bg-base/80 p-4 text-sm leading-relaxed text-ink placeholder:text-secondary/70 focus:outline-none ${
+                className={`w-full resize-none rounded-2xl border bg-base/80 p-3.5 text-[16px] leading-relaxed text-ink placeholder:text-secondary/70 focus:outline-none sm:p-4 sm:text-sm ${
                   live.violatedTabooWords.length > 0
                     ? 'border-danger focus:border-danger'
                     : live.hasTargetWord
@@ -348,7 +338,7 @@ export function ProveSkillModal({
             {speech.error && <p className="text-xs text-danger">{speech.error}</p>}
 
             {/* Controles de envío y voz */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="grid grid-cols-1 gap-2.5 pt-2 sm:flex sm:items-center sm:justify-between">
               <button
                 type="button"
                 disabled={!speech.isSupported || submitting || timeExpired}
@@ -358,7 +348,7 @@ export function ProveSkillModal({
                     ? 'Dictar respuesta por voz (es-ES)'
                     : 'Dictado por voz no disponible en este navegador'
                 }
-                className={`inline-flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition ${
+                className={`inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition sm:w-auto ${
                   !speech.isSupported
                     ? 'cursor-not-allowed border-surface bg-surface/20 text-secondary/50'
                     : speech.isListening
@@ -378,7 +368,7 @@ export function ProveSkillModal({
                 <button
                   type="button"
                   onClick={handleRetry}
-                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 font-display text-xs font-bold tracking-wider text-base transition hover:brightness-110"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5 font-display text-xs font-bold tracking-wider text-base transition hover:brightness-110 sm:w-auto"
                 >
                   <RotateCcw className="h-4 w-4" />
                   INTENTAR DE NUEVO
@@ -388,7 +378,7 @@ export function ProveSkillModal({
                   type="button"
                   disabled={sentence.trim().length === 0 || submitting}
                   onClick={() => void handleEvaluate(sentence)}
-                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-5 py-2.5 font-display text-xs font-bold tracking-wider text-base transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-accent px-5 py-2.5 font-display text-xs font-bold tracking-wider text-base transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
                 >
                   {submitting ? (
                     <>

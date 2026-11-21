@@ -47,8 +47,13 @@ function getNodePosition(skill: Skill, filter: TreeFilter): { x: number; y: numb
   }
   const branchIndex = BRANCH_META.findIndex((b) => b.id === skill.branch);
   const col = branchIndex >= 0 ? branchIndex : 0;
+  // En vista "Todas" ampliamos la separación horizontal de Tier 2 y Tier 3 para que nunca se solapen
+  const spreadX =
+    skill.posX === 50
+      ? 50
+      : Math.max(22, Math.min(78, 50 + (skill.posX - 50) * 1.9));
   return {
-    x: col * 33.333 + (skill.posX / 100) * 33.333,
+    x: col * 33.333 + (spreadX / 100) * 33.333,
     y: skill.posY,
   };
 }
@@ -61,6 +66,7 @@ export function SkillTreeView({
   selectedSkillId,
   onSelectSkill,
   recentlyUpgradedSkillId,
+  recentlyUpgradedLevel,
   onProveSkill,
   onStartDuelWithSkill,
 }: {
@@ -71,6 +77,7 @@ export function SkillTreeView({
   selectedSkillId: string | null;
   onSelectSkill: (skillId: string | null) => void;
   recentlyUpgradedSkillId: string | null;
+  recentlyUpgradedLevel?: SkillLevel | null;
   onProveSkill: (skill: Skill, targetLevel: Exclude<SkillLevel, 0>) => void;
   onStartDuelWithSkill: (skillId: string) => void;
 }) {
@@ -102,10 +109,12 @@ export function SkillTreeView({
     const map = new Map(visibleSkills.map((s) => [s.id, s]));
     const list: Array<{
       id: string;
+      parentId: string;
       from: { x: number; y: number };
       to: { x: number; y: number };
       parentUnlocked: boolean;
       highlighted: boolean;
+      isNewlyUnlocked: boolean;
     }> = [];
 
     for (const child of visibleSkills) {
@@ -121,18 +130,21 @@ export function SkillTreeView({
           hoveredId === parent.id ||
           selectedSkillId === child.id ||
           selectedSkillId === parent.id;
+        const parentUnlocked = parentLevel >= 1;
 
         list.push({
           id: `${parent.id}->${child.id}`,
+          parentId: parent.id,
           from: parentPos,
           to: childPos,
-          parentUnlocked: parentLevel >= 1,
+          parentUnlocked,
           highlighted,
+          isNewlyUnlocked: parentUnlocked && recentlyUpgradedSkillId === parent.id,
         });
       }
     }
     return list;
-  }, [activeFilter, hoveredId, selectedSkillId, userSkills, visibleSkills]);
+  }, [activeFilter, hoveredId, recentlyUpgradedSkillId, selectedSkillId, userSkills, visibleSkills]);
 
   const selectedDerived = selectedSkill
     ? getSkillNodeStatus(selectedSkill, userSkills, skills)
@@ -238,7 +250,7 @@ export function SkillTreeView({
         >
           <div
             className={`relative h-[520px] sm:h-[560px] ${
-              activeFilter === 'all' ? 'min-w-[740px]' : 'min-w-[320px]'
+              activeFilter === 'all' ? 'min-w-[960px]' : 'min-w-[320px]'
             }`}
           >
             {/* Cabeceras de columnas en vista Todas */}
@@ -291,19 +303,31 @@ export function SkillTreeView({
                       fill="none"
                       vectorEffect="non-scaling-stroke"
                       stroke={activeStroke}
-                      strokeWidth={edge.highlighted ? 6 : 4.5}
-                      opacity={0.22}
+                      strokeWidth={edge.isNewlyUnlocked ? 8 : edge.highlighted ? 6 : 4.5}
+                      opacity={edge.isNewlyUnlocked ? 0.34 : 0.22}
                     />
                     <path
                       d={d}
                       fill="none"
                       vectorEffect="non-scaling-stroke"
                       stroke={activeStroke}
-                      strokeWidth={edge.highlighted ? 2.6 : 2}
+                      strokeWidth={edge.isNewlyUnlocked ? 2.8 : edge.highlighted ? 2.6 : 2}
                       strokeDasharray="8 6"
                       className="animate-dash-flow"
                       opacity={0.98}
                     />
+                    {edge.isNewlyUnlocked && (
+                      <motion.path
+                        d={d}
+                        fill="none"
+                        vectorEffect="non-scaling-stroke"
+                        stroke={PALETTE.accent}
+                        strokeWidth={3.5}
+                        initial={{ pathLength: 0, opacity: 1 }}
+                        animate={{ pathLength: 1, opacity: 0.92 }}
+                        transition={{ duration: 0.85, ease: 'easeOut' }}
+                      />
+                    )}
                   </g>
                 );
               })}
@@ -315,6 +339,14 @@ export function SkillTreeView({
               const derived = getSkillNodeStatus(skill, userSkills, skills);
               const isSelected = selectedSkillId === skill.id;
               const isRecentlyUpgraded = recentlyUpgradedSkillId === skill.id;
+              const isNewlyUnlockedChild =
+                Boolean(recentlyUpgradedSkillId) &&
+                derived.status === 'available' &&
+                skill.parentIds.includes(recentlyUpgradedSkillId!);
+              const upgradedBadgeLabel =
+                (recentlyUpgradedLevel ?? derived.level) === 3
+                  ? '★ MAESTRÍA NV.3'
+                  : `¡LEVEL UP! NV.${recentlyUpgradedLevel ?? derived.level}`;
               const levelColor = LEVEL_COLORS[derived.level];
 
               const borderClass =
@@ -326,9 +358,11 @@ export function SkillTreeView({
                       ? 'border-ink/85 bg-base/95 shadow-[0_0_16px_rgba(247,242,236,0.16)]'
                       : derived.level === 1
                         ? 'border-secondary bg-base/95'
-                        : derived.status === 'available'
-                          ? 'border-dashed border-secondary/80 bg-base/90 hover:border-accent'
-                          : 'border-surface/90 bg-base/80 opacity-75';
+                        : isNewlyUnlockedChild
+                          ? 'border-accent/85 bg-base/95 shadow-[0_0_18px_rgba(244,156,59,0.28)]'
+                          : derived.status === 'available'
+                            ? 'border-dashed border-secondary/80 bg-base/90 hover:border-accent'
+                            : 'border-surface/90 bg-base/80 opacity-75';
 
               return (
                 <div
@@ -337,12 +371,38 @@ export function SkillTreeView({
                   className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
                 >
                   {isRecentlyUpgraded && (
-                    <motion.div
-                      initial={{ scale: 0.7, opacity: 0.9 }}
-                      animate={{ scale: 2.1, opacity: 0 }}
-                      transition={{ duration: 1.1, repeat: 2 }}
-                      className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-accent"
-                    />
+                    <>
+                      <div className="pointer-events-none absolute -inset-3 rounded-3xl bg-accent/25 blur-xl" />
+                      <motion.div
+                        initial={{ scale: 0.78, opacity: 0.95 }}
+                        animate={{ scale: 2.15, opacity: 0 }}
+                        transition={{ duration: 1.15, repeat: 2 }}
+                        className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-accent"
+                      />
+                      <motion.div
+                        initial={{ scale: 0.88, opacity: 0.85 }}
+                        animate={{ scale: 1.75, opacity: 0 }}
+                        transition={{ duration: 1.15, delay: 0.25, repeat: 2 }}
+                        className="pointer-events-none absolute inset-0 rounded-2xl border border-accent"
+                      />
+                      <motion.span
+                        initial={{ opacity: 0, y: 6, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        className="pointer-events-none absolute -top-7 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent px-2.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-[#14151a] shadow-[0_0_16px_rgba(244,156,59,0.65)]"
+                      >
+                        {upgradedBadgeLabel}
+                      </motion.span>
+                    </>
+                  )}
+
+                  {isNewlyUnlockedChild && !isRecentlyUpgraded && (
+                    <motion.span
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="pointer-events-none absolute -top-6 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full border border-accent/80 bg-base/95 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-accent shadow-[0_0_12px_rgba(244,156,59,0.35)]"
+                    >
+                      Desbloqueada
+                    </motion.span>
                   )}
 
                   <motion.button
@@ -353,7 +413,11 @@ export function SkillTreeView({
                     onMouseLeave={() => setHoveredId(null)}
                     onClick={() => onSelectSkill(skill.id)}
                     className={`relative flex min-w-[126px] flex-col items-center gap-1 rounded-2xl border px-3 py-2.5 text-center transition ${borderClass} ${
-                      isSelected ? 'ring-2 ring-accent ring-offset-2 ring-offset-base' : ''
+                      isRecentlyUpgraded ? 'level-up-amber-glow border-accent' : ''
+                    } ${
+                      isSelected && !isRecentlyUpgraded
+                        ? 'ring-2 ring-accent ring-offset-2 ring-offset-base'
+                        : ''
                     }`}
                   >
                     {/* Badge Oxidada */}

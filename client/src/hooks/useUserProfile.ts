@@ -14,7 +14,7 @@ import {
 const PROFILE_STORAGE_KEY = 'skillable_profile_v1';
 const CUSTOM_NICKNAME_KEY = 'skillable_nickname_custom_v1';
 
-export type DemoPresetId = 'pitch' | 'starter_rusty' | 'reset' | 'toggle_rusty';
+export type DemoPresetId = 'demo' | 'reset';
 
 function createDefaultNickname(): string {
   const num = Math.floor(10 + Math.random() * 90);
@@ -37,28 +37,18 @@ function createStarterSkills(): Record<string, UserSkill> {
   };
 }
 
-function createPitchDemoSkills(): Record<string, UserSkill> {
+function createDemoSkills(): Record<string, UserSkill> {
   const now = Date.now();
   return {
     mitologia: {
       skillId: 'mitologia',
-      level: 2,
+      level: 3,
       rusty: false,
       lastPracticedAt: now - 3600_000,
       bestSentence:
-        'La startup construyó toda una mitología alrededor de su primer garaje para inspirar al equipo.',
-      bestScore: 91,
-      attempts: 2,
-    },
-    arquetipo: {
-      skillId: 'arquetipo',
-      level: 1,
-      rusty: false,
-      lastPracticedAt: now - 7200_000,
-      bestSentence:
-        'Con su pizarra llena de flechas, encarnaba el arquetipo del estratega obsesionado con cada detalle.',
-      bestScore: 84,
-      attempts: 1,
+        'La startup construyó toda una mitología alrededor de su primer microondas en el garaje para inspirar al equipo.',
+      bestScore: 93,
+      attempts: 3,
     },
     falacia: {
       skillId: 'falacia',
@@ -66,15 +56,15 @@ function createPitchDemoSkills(): Record<string, UserSkill> {
       rusty: false,
       lastPracticedAt: now - 1800_000,
       bestSentence:
-        'Asegurar que la pizza enfría el código por una caída del servidor es una falacia digna de meme.',
-      bestScore: 94,
+        'Asegurar que el código mejora solo por pedir una pizza a medianoche es una falacia digna de meme.',
+      bestScore: 95,
       attempts: 3,
     },
     paradigma: {
       skillId: 'paradigma',
       level: 1,
       rusty: true,
-      lastPracticedAt: now - 5 * 24 * 60 * 60 * 1000,
+      lastPracticedAt: now - 6 * 24 * 60 * 60 * 1000,
       bestSentence:
         'El trabajo remoto rompió el paradigma de medir el rendimiento por horas frente a una pantalla.',
       bestScore: 78,
@@ -242,33 +232,10 @@ export function useUserProfile() {
 
   const applyDemoPreset = useCallback((preset: DemoPresetId) => {
     setProfile((prev) => {
-      if (preset === 'pitch') {
-        return { ...prev, elo: 1085, skills: createPitchDemoSkills() };
+      if (preset === 'demo') {
+        return { ...prev, elo: 1075, skills: createDemoSkills() };
       }
-      if (preset === 'starter_rusty') {
-        return { ...prev, elo: INITIAL_ELO, skills: createStarterSkills() };
-      }
-      if (preset === 'reset') {
-        return { ...prev, elo: INITIAL_ELO, skills: {} };
-      }
-      // toggle_rusty sobre 'paradigma'
-      const current = prev.skills.paradigma;
-      if (!current || current.level === 0) {
-        return {
-          ...prev,
-          skills: { ...prev.skills, ...createStarterSkills() },
-        };
-      }
-      return {
-        ...prev,
-        skills: {
-          ...prev.skills,
-          paradigma: {
-            ...current,
-            rusty: !current.rusty,
-          },
-        },
-      };
+      return { ...prev, elo: INITIAL_ELO, skills: {} };
     });
   }, []);
 

@@ -422,7 +422,7 @@ export const BOT_CONEXION_TEMPLATES: Record<string, string> = {
   dialectica:
     'Entre mi {X} y el aire acondicionado hay una dialéctica de oficina: uno empuja, el otro resiste, y la síntesis es una temperatura que nadie odia.',
   hegemonia:
-    'En mi casa, mi {X} ejerce una hegemonía silenciosa: nadie votó por esa cosa, pero toda la rutina familiar gira a su alrededor sin cuestionarla.',
+    'En mi casa, mi {X} ejerce una hegemonía silenciosa: nadie votó por esa cosa, pero su influencia se impone y toda la rutina familiar gira a su alrededor como algo natural.',
   pragmatismo:
     'Arreglar la puerta con mi {X} fue puro pragmatismo: no era elegante ni ideal, pero funcionó y nos ahorró una semana esperando al técnico.',
   paradigma:
