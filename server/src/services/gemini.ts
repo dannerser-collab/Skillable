@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 /**
  * Cliente Gemini compartido (Árbitro + Bot) con timeout duro y "circuit breaker":
@@ -7,6 +7,7 @@ import { GoogleGenAI } from '@google/genai';
  */
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+const IS_GEMINI_2 = /^gemini-2\./.test(GEMINI_MODEL);
 
 const BREAKER_THRESHOLD = 3;
 const BREAKER_COOLDOWN_MS = 60_000;
@@ -64,8 +65,9 @@ async function generate(opts: GenerateOptions): Promise<string> {
         systemInstruction: opts.system,
         temperature: opts.temperature ?? 0.4,
         abortSignal: controller.signal,
-        // gemini-2.5-flash: sin "thinking" para minimizar latencia.
-        thinkingConfig: { thinkingBudget: 0 },
+        // Mínimo "thinking" para minimizar latencia: la familia 2.x usa presupuesto de tokens,
+        // la 3.x usa niveles (thinkingBudget: 0 no la desactiva y dispara el timeout de 8 s).
+        thinkingConfig: IS_GEMINI_2 ? { thinkingBudget: 0 } : { thinkingLevel: ThinkingLevel.LOW },
         ...(opts.schema ? { responseMimeType: 'application/json', responseJsonSchema: opts.schema } : {}),
       },
     });
