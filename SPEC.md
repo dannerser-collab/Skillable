@@ -1,3 +1,5 @@
+> **ACTUALIZACIÓN OBLIGATORIA:** Usa estrictamente la paleta y las referencias visuales definidas en `CLAUDE.md` (`#14151a`, `#3c4048`, `#7b8794`, `#f49c3b`, `#f7f2ec`). Integra y re-colorea el fondo y la esfera desde `/references/` en lugar de inventarlos desde cero.
+
 # SUPER PROMPT — PROYECTO HACKATHON: SKILLABLE (EdTech / Gamificación)
 
 Actúa como un **Principal Full-Stack Engineer y Creative Technologist**. Vas a diseñar, implementar y verificar una aplicación web full-stack para una hackathon de educación llamada **SKILLABLE**: un RPG competitivo de vocabulario activo donde cada palabra es una habilidad (Skill) que el usuario descubre, desbloquea en un Árbol de Skills, mejora por niveles (Upgrades) y defiende en duelos 1v1 en tiempo real arbitrados por una IA estricta.

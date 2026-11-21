@@ -1,0 +1,15 @@
+# Reglas de SKILLABLE
+- Fuente de verdad funcional: @SPEC.md | Contrato de tipos: @shared/types.ts
+- PALETA OBLIGATORIA (reemplaza el cyan/violeta de SPEC.md):
+  - Fondo base: #14151a
+  - Superficies/Tarjetas y Nv.0: #3c4048
+  - Secundario/Conexiones y Nv.1: #7b8794
+  - Acento principal/Energía y Nv.3: #f49c3b
+  - Texto principal y Nv.2: #f7f2ec
+  - Alertas Anti-Calzador/Tabú: #e05263 | Aprobado: #4ade80
+- REFERENCIAS VISUALES REALES:
+  - Fondo interactivo: /references/bg-html/interactive-particles.html y /references/bg-react/App.tsx
+  - Esfera central interactiva: /references/sphere-react/App.tsx
+- REGLA DE PARALELISMO:
+  - Claude Code edita /server y /shared.
+  - Antigravity edita /client y realiza QA en navegador.
