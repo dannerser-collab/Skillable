@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+
+/* Paleta obligatoria (CLAUDE.md) → utilidades bg-base, text-ink, border-accent, etc. */
+@theme {
+  --color-base: #14151a;
+  --color-surface: #3c4048;
+  --color-secondary: #7b8794;
+  --color-accent: #f49c3b;
+  --color-ink: #f7f2ec;
+  --color-danger: #e05263;
+  --color-success: #4ade80;
+
+  --font-display: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-base);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
