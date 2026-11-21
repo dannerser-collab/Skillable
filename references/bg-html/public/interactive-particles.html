@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fondo de partículas interactivo</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; background: #111; }
+      .particle-background {
+        position: fixed;
+        inset: 0;
+        z-index: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+      }
+      /* Tu contenido debe tener position: relative y z-index: 1 */
+      .page-content { position: relative; z-index: 1; }
+    </style>
+  </head>
+  <body>
+    <canvas class="particle-background" aria-hidden="true"></canvas>
+
+    <script>
+      (() => {
+        const canvas = document.querySelector('.particle-background');
+        const ctx = canvas.getContext('2d');
+        const pointer = { x: -1000, y: -1000 };
+        const colors = ['255,255,255', '255,255,255', '255,255,255', '255,255,255', '242,80,34'];
+        const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let particles = [];
+        let width = 0;
+        let height = 0;
+
+        function resize() {
+          const ratio = Math.min(devicePixelRatio || 1, 2);
+          width = innerWidth;
+          height = innerHeight;
+          canvas.width = width * ratio;
+          canvas.height = height * ratio;
+          ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+          particles = Array.from(
+            { length: Math.min(100, Math.floor(width * height / 16000)) },
+            () => ({
+              x: Math.random() * width,
+              y: Math.random() * height,
+              vx: (Math.random() - .5) * .3,
+              vy: (Math.random() - .5) * .3,
+              radius: Math.random() * 1.6 + .7,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              sides: Math.random() < .14 ? 3 + Math.floor(Math.random() * 2) : 0
+            })
+          );
+          if (reducedMotion) draw();
+        }
+
+        function polygon(particle) {
+          ctx.beginPath();
+          for (let i = 0; i < particle.sides; i++) {
+            const angle = i / particle.sides * Math.PI * 2 - Math.PI / 2;
+            const x = particle.x + Math.cos(angle) * 6;
+            const y = particle.y + Math.sin(angle) * 6;
+            i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+          }
+          ctx.closePath();
+        }
+
+        function draw() {
+          ctx.clearRect(0, 0, width, height);
+
+          for (const p of particles) {
+            const dx = p.x - pointer.x;
+            const dy = p.y - pointer.y;
+            const distance = Math.hypot(dx, dy);
+            if (distance < 140 && distance > 0) {
+              p.x += dx / distance * 1.5;
+              p.y += dy / distance * 1.5;
+            }
+            p.x += p.vx;
+            p.y += p.vy;
+            if (p.x < 0 || p.x > width) p.vx *= -1;
+            if (p.y < 0 || p.y > height) p.vy *= -1;
+          }
+
+          particles.forEach((p, index) => {
+            for (let i = index + 1; i < particles.length; i++) {
+              const other = particles[i];
+              const distance = Math.hypot(p.x - other.x, p.y - other.y);
+              if (distance < 125) {
+                ctx.strokeStyle = `rgba(255,255,255,${(1 - distance / 125) * .16})`;
+                ctx.lineWidth = .8;
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                ctx.lineTo(other.x, other.y);
+                ctx.stroke();
+              }
+            }
+            const distance = Math.hypot(p.x - pointer.x, p.y - pointer.y);
+            if (distance < 190) {
+              ctx.strokeStyle = `rgba(242,80,34,${(1 - distance / 190) * .35})`;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(pointer.x, pointer.y);
+              ctx.stroke();
+            }
+          });
+
+          for (const p of particles) {
+            ctx.shadowBlur = width >= 768 ? 12 : 0;
+            ctx.shadowColor = `rgb(${p.color})`;
+            ctx.fillStyle = ctx.strokeStyle = `rgba(${p.color},.85)`;
+            ctx.lineWidth = 1.1;
+            if (p.sides) {
+              polygon(p);
+              ctx.stroke();
+            } else {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          ctx.shadowBlur = 0;
+          if (!reducedMotion) requestAnimationFrame(draw);
+        }
+
+        addEventListener('pointermove', event => {
+          pointer.x = event.clientX;
+          pointer.y = event.clientY;
+        });
+        document.addEventListener('pointerleave', () => {
+          pointer.x = pointer.y = -1000;
+        });
+        addEventListener('resize', resize);
+
+        resize();
+        draw();
+      })();
+    </script>
+  </body>
+</html>

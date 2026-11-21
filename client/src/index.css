@@ -15,6 +15,10 @@
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
+:root {
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {
@@ -23,8 +27,91 @@ body,
 
 body {
   margin: 0;
+  overflow-x: hidden;
   background-color: var(--color-base);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+.bg-tech-grid {
+  background-color: #14151a;
+  background-image:
+    radial-gradient(circle at 50% 35%, rgba(60, 64, 72, 0.16) 0%, rgba(20, 21, 26, 0) 68%),
+    linear-gradient(rgba(123, 135, 148, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(123, 135, 148, 0.035) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    56px 56px,
+    56px 56px;
+}
+
+.glass-panel {
+  background: rgba(26, 28, 35, 0.78);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(60, 64, 72, 0.9);
+}
+
+.sphere-canvas {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.sphere-canvas.is-dragging {
+  cursor: grabbing;
+}
+
+@keyframes dashFlow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+.animate-dash-flow {
+  animation: dashFlow 1.8s linear infinite;
+}
+
+@keyframes holoSheen {
+  0% {
+    transform: translateX(-140%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(240%) skewX(-18deg);
+  }
+}
+
+.animate-holo-sheen {
+  animation: holoSheen 6.5s ease-in-out infinite;
+}
+
+/* Scrollbar discreta en tonos de la paleta */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #14151a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3c4048;
+  border-radius: 9999px;
+  border: 2px solid #14151a;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #7b8794;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sphere-canvas {
+    cursor: default;
+  }
+  .animate-dash-flow,
+  .animate-holo-sheen {
+    animation: none;
+  }
 }
