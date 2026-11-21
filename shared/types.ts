@@ -151,8 +151,10 @@ export interface JudgeRequest {
   sentence: string;
   /** Nivel al que se intenta subir; determina el modo de reto. */
   targetLevel: Exclude<SkillLevel, 0>;
-  /** Para retos con palabra absurda elegida por el cliente (conexion). */
+  /** Palabra padre (sinergia) o absurda (conexion) mostrada al jugador; el servidor la valida contra el catálogo. */
   requiredWords?: string[];
+  /** Escenario exacto mostrado al jugador (modo 'escenario'); se valida contra `skill.scenarios`. */
+  scenario?: string;
 }
 
 export interface JudgeResponse {

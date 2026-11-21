@@ -167,12 +167,8 @@ function evaluateLocally(sentence: string, challenge: Challenge): JudgeResult {
   };
 }
 
-export interface SoloJudgeSubmitInput extends JudgeRequest {
-  scenario?: string;
-}
-
 export async function submitSoloJudge(
-  req: SoloJudgeSubmitInput,
+  req: JudgeRequest,
   challenge: Challenge,
 ): Promise<JudgeResponse> {
   try {

@@ -25,7 +25,9 @@ export function useArenaSocket() {
   const [clockOffsetMs, setClockOffsetMs] = useState(0);
 
   useEffect(() => {
-    const socket: TypedSocket = io('/', {
+    // Mismo origen que la página: en dev pasa por el proxy de Vite (ws: true),
+    // en build lo sirve Express; funciona igual en localhost, LAN (QR) o túnel público.
+    const socket: TypedSocket = io(window.location.origin, {
       transports: ['websocket', 'polling'],
       autoConnect: true,
     });

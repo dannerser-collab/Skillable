@@ -11,6 +11,7 @@ import type {
   Challenge,
   ClientToServerEvents,
   InterServerEvents,
+  JudgeRequest,
   JudgeResponse,
   ServerToClientEvents,
   SkillLevel,
@@ -90,9 +91,9 @@ app.get('/api/challenge/:skillId/:level', (req, res) => {
   res.json(challenge);
 });
 
-/** Prove Skill / Upgrade (modo Solo). Body: JudgeRequest (+ `scenario?` opcional). */
+/** Prove Skill / Upgrade (modo Solo). Body: JudgeRequest (validado campo a campo). */
 app.post('/api/judge', async (req, res) => {
-  const body = (req.body ?? {}) as Record<string, unknown>;
+  const body = (req.body ?? {}) as { [K in keyof JudgeRequest]?: unknown };
   const skill = typeof body.skillId === 'string' ? getSkill(body.skillId) : undefined;
   if (!skill) return fail(res, 404, 'Skill no encontrada.', 'SKILL_NOT_FOUND');
   const level = parseLevel(body.targetLevel);
