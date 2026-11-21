@@ -97,7 +97,7 @@ export function Navbar({
           <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-accent/45 bg-accent/15 font-display text-sm font-bold text-accent transition group-hover:border-accent group-hover:bg-accent/25">
             SK
           </span>
-          <span className="font-display text-base font-bold tracking-[0.18em] text-ink sm:text-lg">
+          <span className="font-display text-[1rem] font-bold tracking-[0.18em] text-ink sm:text-lg">
             SKILLABLE
           </span>
         </button>

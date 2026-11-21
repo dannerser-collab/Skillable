@@ -49,7 +49,7 @@ export function HomeView({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -12 }}
       transition={{ duration: 0.25 }}
-      className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-4 pb-12 pt-28 sm:px-6 md:pt-24"
+      className="mx-auto flex min-h-screen max-w-6xl flex-col justify-center px-4 pb-8 pt-24 sm:px-6 md:pt-20"
     >
       {/* Cabecera Hero */}
       <div className="relative z-20 mx-auto max-w-3xl text-center">
@@ -62,14 +62,14 @@ export function HomeView({
           <ScrambleText text="SKILLABLE" durationMs={750} scrambleOnHover />
         </h1>
 
-        <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-secondary sm:text-base">
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-secondary sm:text-[1rem]">
           Convierte tu vocabulario pasivo en habilidades activas. Desbloquea, mejora y defiende
           cada palabra en la Arena.
         </p>
       </div>
 
       {/* Escenario dedicado para CentralSphere: nunca tapa ni bloquea los botones */}
-      <div className="relative z-10 mx-auto my-1 h-[310px] w-full max-w-[520px] sm:h-[360px] md:h-[400px]">
+      <div className="relative z-10 mx-auto my-1 h-[270px] w-full max-w-[480px] sm:h-[300px] md:h-[330px]">
         <CentralSphere accent={hoveredCta} />
         <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-2 rounded-full border border-surface/80 bg-base/75 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-secondary">
           <span className="h-1.5 w-1.5 rounded-full bg-accent" />

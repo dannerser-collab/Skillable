@@ -105,14 +105,11 @@ export function SkillTreeView({
       from: { x: number; y: number };
       to: { x: number; y: number };
       parentUnlocked: boolean;
-      childUnlocked: boolean;
-      parentLevel: SkillLevel;
       highlighted: boolean;
     }> = [];
 
     for (const child of visibleSkills) {
       const childPos = getNodePosition(child, activeFilter);
-      const childLevel = userSkills[child.id]?.level ?? 0;
 
       for (const parentId of child.parentIds) {
         const parent = map.get(parentId);
@@ -130,8 +127,6 @@ export function SkillTreeView({
           from: parentPos,
           to: childPos,
           parentUnlocked: parentLevel >= 1,
-          childUnlocked: childLevel >= 1,
-          parentLevel,
           highlighted,
         });
       }
@@ -199,8 +194,8 @@ export function SkillTreeView({
 
         {/* Barra de progreso y leyenda */}
         <div className="glass-panel flex flex-wrap items-center gap-4 rounded-xl px-4 py-2.5">
-          <div className="min-w-[165px]">
-            <div className="mb-1 flex items-center justify-between font-mono text-[11px]">
+          <div className="min-w-[195px]">
+            <div className="mb-1 flex items-center justify-between gap-3 font-mono text-[11px]">
               <span className="text-secondary">
                 {progress.unlocked}/{progress.total} desbloqueadas
               </span>
@@ -277,38 +272,37 @@ export function SkillTreeView({
                       key={edge.id}
                       d={d}
                       fill="none"
+                      vectorEffect="non-scaling-stroke"
                       stroke={PALETTE.surface}
-                      strokeWidth={edge.highlighted ? 0.65 : 0.45}
-                      strokeDasharray="1.4 1.4"
-                      opacity={0.78}
+                      strokeWidth={edge.highlighted ? 2.4 : 1.75}
+                      strokeDasharray="6 6"
+                      opacity={0.82}
                     />
                   );
                 }
 
-                const activeStroke =
-                  edge.childUnlocked || edge.parentLevel === 3
-                    ? PALETTE.accent
-                    : edge.parentLevel === 2
-                      ? PALETTE.text
-                      : PALETTE.secondary;
+                // Al desbloquear el nodo padre (Nv.1+), la línea SVG se ilumina en ámbar (#f49c3b)
+                const activeStroke = PALETTE.accent;
 
                 return (
                   <g key={edge.id}>
                     <path
                       d={d}
                       fill="none"
+                      vectorEffect="non-scaling-stroke"
                       stroke={activeStroke}
-                      strokeWidth={edge.highlighted ? 0.9 : 0.6}
-                      opacity={0.35}
+                      strokeWidth={edge.highlighted ? 6 : 4.5}
+                      opacity={0.22}
                     />
                     <path
                       d={d}
                       fill="none"
+                      vectorEffect="non-scaling-stroke"
                       stroke={activeStroke}
-                      strokeWidth={edge.highlighted ? 0.7 : 0.45}
-                      strokeDasharray="2.2 1.8"
+                      strokeWidth={edge.highlighted ? 2.6 : 2}
+                      strokeDasharray="8 6"
                       className="animate-dash-flow"
-                      opacity={0.95}
+                      opacity={0.98}
                     />
                   </g>
                 );
@@ -550,7 +544,7 @@ export function SkillTreeView({
                     <button
                       type="button"
                       disabled
-                      className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-surface bg-surface/40 px-4 py-2.5 text-xs font-semibold text-secondary"
+                      className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-surface bg-surface/40 px-4 py-2.5 text-xs font-semibold text-ink/80"
                     >
                       <Lock className="h-4 w-4" />
                       <span>

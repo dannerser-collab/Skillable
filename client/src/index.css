@@ -65,7 +65,7 @@ body {
 
 @keyframes dashFlow {
   to {
-    stroke-dashoffset: -12;
+    stroke-dashoffset: -28;
   }
 }
 

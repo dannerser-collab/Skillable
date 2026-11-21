@@ -106,7 +106,7 @@ export function ExpeditionView({
             <h2 className="font-display text-4xl font-bold tracking-wide text-ink sm:text-5xl">
               <ScrambleText text={currentSkill.word} triggerKey={rollKey} durationMs={700} />
             </h2>
-            <p className="mt-3 text-base leading-relaxed text-ink/90">{currentSkill.definition}</p>
+            <p className="mt-3 text-[1rem] leading-relaxed text-ink/90">{currentSkill.definition}</p>
           </div>
 
           {/* Tip y Ejemplos */}

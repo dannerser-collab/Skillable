@@ -94,6 +94,9 @@ export function CentralSphere({
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (reducedMotion && width > 0 && height > 0) {
+        render(performance.now());
+      }
     };
 
     const project = (point: Point3D, radius = 1) => {
@@ -314,6 +317,11 @@ export function CentralSphere({
         targetX += (event.clientY - lastPointer.y) * 0.006;
         targetX = Math.max(-1.1, Math.min(1.1, targetX));
         lastPointer = { x: event.clientX, y: event.clientY };
+        if (reducedMotion) {
+          rotationX = targetX;
+          rotationY = targetY;
+          render(performance.now());
+        }
         return;
       }
 
@@ -322,6 +330,9 @@ export function CentralSphere({
       const y = (event.clientY - rect.top) / Math.max(height, 1) - 0.5;
       targetY += (x * 0.55 - (targetY - rotationY)) * 0.025;
       targetX = -0.18 + Math.max(-0.6, Math.min(0.6, y)) * 0.36;
+      if (reducedMotion && width > 0 && height > 0) {
+        render(performance.now());
+      }
     };
 
     const pointerUp = () => {

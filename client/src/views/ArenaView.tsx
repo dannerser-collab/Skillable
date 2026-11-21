@@ -150,10 +150,12 @@ export function ArenaView({
     return rs.rounds[rs.currentRoundIndex] ?? null;
   }, [arena.roomState]);
 
-  // Limpiar input al cambiar de ronda
+  // Limpiar input al cambiar de ronda o salir de sala
   useEffect(() => {
     if (!arena.roomState || !currentRound) {
       lastRoundKeyRef.current = null;
+      setRoundText('');
+      setVotedNextRound(false);
       return;
     }
     const roundKey = `${arena.roomState.code}:${currentRound.index}:${currentRound.startedAt}`;
@@ -268,13 +270,25 @@ export function ArenaView({
           </h1>
         </div>
 
-        <div className="flex items-center gap-2 rounded-full border border-surface bg-base/80 px-3 py-1 font-mono text-[11px]">
-          <span
-            className={`h-2 w-2 rounded-full ${arena.connected ? 'bg-success' : 'bg-accent animate-pulse'}`}
-          />
-          <span className={arena.connected ? 'text-success' : 'text-accent'}>
-            {arena.connected ? 'Socket en tiempo real listo' : 'Conectando con Arena...'}
-          </span>
+        <div className="flex items-center gap-2.5">
+          {roomState && (
+            <button
+              type="button"
+              onClick={arena.leaveRoom}
+              className="inline-flex items-center gap-1.5 rounded-full border border-surface bg-base/80 px-3 py-1 font-mono text-[11px] text-secondary transition hover:border-danger/60 hover:text-danger"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Salir de sala
+            </button>
+          )}
+          <div className="flex items-center gap-2 rounded-full border border-surface bg-base/80 px-3 py-1 font-mono text-[11px]">
+            <span
+              className={`h-2 w-2 rounded-full ${arena.connected ? 'bg-success' : 'bg-accent animate-pulse'}`}
+            />
+            <span className={arena.connected ? 'text-success' : 'text-accent'}>
+              {arena.connected ? 'Socket en tiempo real listo' : 'Conectando con Arena...'}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -544,14 +558,6 @@ export function ArenaView({
                     ? 'Esperando contrincante...'
                     : '¡Rival conectado! Listos para pelear'}
                 </h2>
-                <button
-                  type="button"
-                  onClick={arena.leaveRoom}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-surface px-2.5 py-1 text-xs text-secondary hover:border-danger/60 hover:text-danger"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                  Salir
-                </button>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -576,7 +582,7 @@ export function ArenaView({
 
                       {player ? (
                         <div>
-                          <p className="flex items-center gap-1.5 font-display text-base font-bold text-ink">
+                          <p className="flex items-center gap-1.5 font-display text-[1rem] font-bold text-ink">
                             {player.isBot && <Bot className="h-4 w-4 text-accent" />}
                             {player.nickname}
                           </p>
@@ -827,15 +833,16 @@ export function ArenaView({
                       ? 'El Árbitro IA está evaluando ambas respuestas...'
                       : '¡Respuesta enviada! Esperando al contrincante...'}
                   </p>
-                  {currentRound.submissions[mySlot] && (
+                  {(currentRound.submissions[mySlot]?.text || roundText.trim()) && (
                     <p className="mt-2 text-xs italic text-secondary">
-                      “{currentRound.submissions[mySlot].text}”
+                      “{currentRound.submissions[mySlot]?.text || roundText.trim()}”
                     </p>
                   )}
                 </div>
               ) : (
                 <div className="mt-4 space-y-3">
                   <textarea
+                    key={`${roomState.code}-${currentRound.index}`}
                     rows={3}
                     value={roundText}
                     onChange={(e) => handleRoundInputChange(e.target.value)}
@@ -950,7 +957,7 @@ export function ArenaView({
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <p className="font-display text-base font-bold text-ink">
+                        <p className="font-display text-[1rem] font-bold text-ink">
                           {player?.nickname ?? slot}{' '}
                           {isMe && (
                             <span className="ml-1 font-mono text-[11px] text-accent">(TÚ)</span>
