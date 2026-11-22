@@ -57,6 +57,8 @@ export function HomeView({
   const [savedPing, setSavedPing] = useState(false);
   const [presetOpen, setPresetOpen] = useState(false);
   const [presetFeedback, setPresetFeedback] = useState<string | null>(null);
+  // Los botones del Hub se revelan cuando el título "Skillable" termina de asentarse.
+  const [titleSettled, setTitleSettled] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
   const sphereControlRef = useRef<CentralSphereHandle | null>(null);
   const pointerStateRef = useRef<{
@@ -83,6 +85,7 @@ export function HomeView({
   }, [nickname]);
 
   useEffect(() => {
+    setTitleSettled(false);
     if (!expanded) {
       setSphereHovered(false);
       setIsDragging(false);
@@ -486,7 +489,7 @@ export function HomeView({
                   Vocabulario Activo · RPG
                 </div>
                 <h1 className="font-display text-4xl font-bold tracking-[0.22em] text-ink drop-shadow-[0_0_28px_rgba(244,156,59,0.22)] sm:text-5xl md:text-6xl">
-                  <KineticTitle text="Skillable" />
+                  <KineticTitle text="Skillable" onSettled={() => setTitleSettled(true)} />
                 </h1>
               </motion.div>
 
@@ -498,13 +501,20 @@ export function HomeView({
                       key={btn.id}
                       type="button"
                       initial={{ opacity: 0, y: 16, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      animate={
+                        titleSettled
+                          ? { opacity: 1, y: 0, scale: 1 }
+                          : { opacity: 0, y: 16, scale: 0.96 }
+                      }
                       exit={{ opacity: 0, y: 10, scale: 0.97 }}
                       transition={{
                         duration: 0.38,
-                        delay: 0.14 + index * 0.055,
+                        delay: titleSettled ? index * 0.07 : 0,
                         ease: STUDIO_EASE,
                       }}
+                      tabIndex={titleSettled ? 0 : -1}
+                      aria-hidden={!titleSettled}
+                      style={{ pointerEvents: titleSettled ? 'auto' : 'none' }}
                       whileHover={{ y: -2, scale: 1.015, transition: STUDIO_SPRING }}
                       whileTap={{ scale: 0.985 }}
                       onMouseEnter={() => setHoveredCta(btn.id)}
