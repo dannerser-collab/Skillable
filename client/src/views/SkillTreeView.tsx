@@ -41,8 +41,12 @@ import { BRANCH_META } from '../data/fallbackSkills.ts';
 import { ScrambleText } from '../components/ScrambleText.tsx';
 import { STUDIO_EASE, VIEW_TRANSITION, VIEW_VARIANTS } from '../utils/motion.ts';
 import {
+  BRANCH_LABEL_TOP,
   buildBranchLayout,
   buildFullLayout,
+  LABEL_SIDES,
+  labelGap,
+  type LabelSide,
   type Pt,
   type TreeLayout,
 } from '../utils/skillTreeLayout.ts';
@@ -304,7 +308,7 @@ export function SkillTreeView({
       </div>
 
       {/* Lienzo de constelación */}
-      <div className="glass-panel relative overflow-hidden rounded-2xl p-3 sm:p-5">
+      <div className="relative overflow-visible border-0 bg-transparent p-3 shadow-none sm:p-5">
         <div ref={canvasRef} className="flex w-full flex-col items-center gap-6">
           {stages.map(({ key, layout }, stageIndex) => {
             const scale = useFull
@@ -422,7 +426,7 @@ function ConstellationStage({
           width={stage.width}
           height={stage.height}
           viewBox={`0 0 ${stage.width} ${stage.height}`}
-          className="pointer-events-none absolute inset-0 overflow-visible"
+          className="pointer-events-none absolute inset-0 z-0 overflow-visible"
           aria-hidden="true"
         >
           <defs>
@@ -573,19 +577,20 @@ function ConstellationStage({
           const branchSkills = skills.filter((s) => s.branch === a.branch);
           const unlocked = branchSkills.filter((s) => level(s.id) >= 1).length;
           const points = branchSkills.reduce((acc, s) => acc + level(s.id), 0);
+          const at = a.labelAt;
           const pos =
             a.labelSide === 'left'
-              ? { right: stage.width - a.base.x + 22, top: a.base.y, transform: 'translateY(-50%)', textAlign: 'right' as const }
+              ? { right: stage.width - at.x + 22, top: at.y + BRANCH_LABEL_TOP, textAlign: 'right' as const }
               : a.labelSide === 'right'
-                ? { left: a.base.x + 22, top: a.base.y, transform: 'translateY(-50%)', textAlign: 'left' as const }
-                : { left: a.base.x, top: a.base.y + 16, transform: 'translateX(-50%)', textAlign: 'center' as const };
+                ? { left: at.x + 22, top: at.y + BRANCH_LABEL_TOP, textAlign: 'left' as const }
+                : { left: at.x, top: at.y + 16, transform: 'translateX(-50%)', textAlign: 'center' as const };
           return (
             <motion.div
               key={`label-${a.branch}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: baseDelay + 0.1, duration: 0.4, ease: STUDIO_EASE }}
-              className="pointer-events-none absolute whitespace-nowrap"
+              className="pointer-events-none absolute z-10 whitespace-nowrap bg-transparent px-1 [filter:drop-shadow(0_1px_2px_rgba(20,21,26,0.95))_drop-shadow(0_0_10px_rgba(20,21,26,0.85))]"
               style={{ ...pos }}
             >
               <div
@@ -620,6 +625,7 @@ function ConstellationStage({
               pos={p}
               size={skill.tier === 2 ? stage.nodeSm : stage.nodeLg}
               labelPx={stage.labelPx}
+              labelSide={layout.labels[skill.id] ?? 'below'}
               derived={derived}
               delay={tierDelay(skill.tier) + (skill.posX / 100) * 0.08}
               dimmed={hasFocus && !focus.has(skill.id)}
@@ -674,6 +680,7 @@ function SkillNode({
   pos,
   size,
   labelPx,
+  labelSide,
   derived,
   delay,
   dimmed,
@@ -689,6 +696,7 @@ function SkillNode({
   pos: Pt;
   size: number;
   labelPx: number;
+  labelSide: LabelSide;
   derived: DerivedSkillStatus;
   delay: number;
   dimmed: boolean;
@@ -730,6 +738,14 @@ function SkillNode({
   const upgradedBadgeLabel =
     (recentlyUpgradedLevel ?? level) === 3 ? '★ MAESTRÍA NV.3' : `¡LEVEL UP! NV.${recentlyUpgradedLevel ?? level}`;
   const iconSize = Math.round(size * 0.4);
+  const side = LABEL_SIDES[labelSide];
+  const labelDist = size / 2 + labelGap(skill.tier, labelSide);
+  const labelStyle: CSSProperties = {
+    left: size / 2 + side.ux * labelDist,
+    top: size / 2 + side.uy * labelDist,
+    transform: `translate(${side.tx * 100}%, ${side.ty * 100}%)`,
+    textAlign: side.tx === 0 ? 'left' : side.tx === -1 ? 'right' : 'center',
+  };
   const stateLabel = locked
     ? 'Bloqueada'
     : available
@@ -741,7 +757,7 @@ function SkillNode({
   return (
     <div
       className="absolute"
-      style={{ left: pos.x, top: pos.y, width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2, zIndex: hovered ? 30 : 20 }}
+      style={{ left: pos.x, top: pos.y, width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2, zIndex: hovered ? 20 : 10 }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.45 }}
@@ -855,14 +871,14 @@ function SkillNode({
           </span>
         )}
 
-        {/* Nombre */}
+        {/* Nombre: velo sutil en el lado libre de rutas (calculado en skillTreeLayout) */}
         <div
-          className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 whitespace-nowrap text-center"
-          style={{ marginTop: major ? 18 : 14 }}
+          className="pointer-events-none absolute whitespace-nowrap rounded-lg bg-[#14151a]/55 px-2 py-0.5 backdrop-blur-xs [filter:drop-shadow(0_1px_2px_rgba(20,21,26,0.9))]"
+          style={labelStyle}
         >
           <div
-            className={`font-display font-bold tracking-wide ${locked ? 'text-secondary' : 'text-ink'}`}
-            style={{ fontSize: labelPx, textShadow: '0 1px 8px rgba(20,21,26,0.95)' }}
+            className={`font-display font-bold leading-tight tracking-wide ${locked ? 'text-secondary' : 'text-ink'}`}
+            style={{ fontSize: labelPx }}
           >
             {skill.word}
           </div>

@@ -1,0 +1,66 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "Hub" [ref=e6]
+    - navigation "Navegación móvil" [ref=e10]:
+      - button "Árbol" [ref=e11]
+      - button "Expedición" [ref=e17]
+      - button "Arena 1v1" [ref=e22]
+  - main [ref=e33]:
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - button "Todas (1/15)" [ref=e37]
+          - button "Narrativa y Cultura 0/5" [ref=e38]:
+            - generic [ref=e41]: Narrativa y Cultura
+            - generic [ref=e42]: 0/5
+          - button "Retórica y Debate 0/5" [ref=e43]:
+            - generic [ref=e48]: Retórica y Debate
+            - generic [ref=e49]: 0/5
+          - button "Estrategia y Tech 1/5" [ref=e50]:
+            - generic [ref=e54]: Estrategia y Tech
+            - generic [ref=e55]: 1/5
+        - generic [ref=e56]:
+          - generic [ref=e58]:
+            - generic [ref=e59]: 0/5 desbloqueadas
+            - generic [ref=e60]: 0% maestría
+          - generic [ref=e63]:
+            - generic [ref=e64]: Dominada
+            - generic [ref=e66]: Disponible
+            - generic [ref=e68]: Bloqueada
+            - generic [ref=e70]: Oxidada
+      - generic [ref=e175]:
+        - generic:
+          - generic: Narrativa y Cultura
+          - generic:
+            - text: "0"
+            - generic: /5
+          - generic: 0/15 pts maestría
+        - generic [ref=e177]:
+          - button "Mitología · Disponible" [ref=e178]
+          - generic: T1
+          - generic:
+            - generic: Mitología
+            - generic: Disponible
+        - generic [ref=e182]:
+          - button "Arquetipo · Bloqueada" [ref=e183]
+          - generic:
+            - generic: Arquetipo
+            - generic: Bloqueada
+        - generic [ref=e190]:
+          - button "Alegoría · Bloqueada" [ref=e191]
+          - generic:
+            - generic: Alegoría
+            - generic: Bloqueada
+        - generic [ref=e196]:
+          - button "Cosmovisión · Bloqueada" [ref=e197]
+          - generic:
+            - generic: Cosmovisión
+            - generic: Bloqueada
+          - generic:
+            - generic: "Requiere:"
+            - text: Arquetipo + Alegoría
+        - generic [ref=e202]:
+          - button "Catarsis · Bloqueada" [ref=e203]
+          - generic:
+            - generic: Catarsis
+            - generic: Bloqueada

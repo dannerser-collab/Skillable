@@ -1,0 +1,129 @@
+- generic [ref=e3]:
+  - banner [ref=e72]:
+    - generic [ref=e73]:
+      - button "Volver al Hub" [ref=e74]
+      - navigation "Navegación de vistas" [ref=e78]:
+        - button "Árbol de Skills" [ref=e79]
+        - button "Expedición" [ref=e86]
+        - button "Arena 1v1" [ref=e91]
+  - main [ref=e4]:
+    - generic [ref=e102]:
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - button "Todas (1/15)" [ref=e105]
+          - button "Narrativa y Cultura 0/5" [ref=e106]:
+            - generic [ref=e109]: Narrativa y Cultura
+            - generic [ref=e110]: 0/5
+          - button "Retórica y Debate 0/5" [ref=e111]:
+            - generic [ref=e116]: Retórica y Debate
+            - generic [ref=e117]: 0/5
+          - button "Estrategia y Tech 1/5" [ref=e118]:
+            - generic [ref=e122]: Estrategia y Tech
+            - generic [ref=e123]: 1/5
+        - generic [ref=e124]:
+          - generic [ref=e126]:
+            - generic [ref=e127]: 1/15 desbloqueadas
+            - generic [ref=e128]: 2% maestría
+          - generic [ref=e131]:
+            - generic [ref=e132]: Dominada
+            - generic [ref=e134]: Disponible
+            - generic [ref=e136]: Bloqueada
+            - generic [ref=e138]: Oxidada
+      - generic [ref=e143]:
+        - generic:
+          - generic: Narrativa y Cultura
+          - generic:
+            - text: "0"
+            - generic: /5
+          - generic: 0/15 pts maestría
+        - generic:
+          - generic: Retórica y Debate
+          - generic:
+            - text: "0"
+            - generic: /5
+          - generic: 0/15 pts maestría
+        - generic:
+          - generic: Estrategia y Tech
+          - generic:
+            - text: "1"
+            - generic: /5
+          - generic: 1/15 pts maestría
+        - generic [ref=e145]:
+          - button "Mitología · Disponible" [ref=e146]
+          - generic: T1
+          - generic:
+            - generic: Mitología
+            - generic: Disponible
+        - generic [ref=e150]:
+          - button "Arquetipo · Bloqueada" [ref=e151]
+          - generic:
+            - generic: Arquetipo
+            - generic: Bloqueada
+        - generic [ref=e158]:
+          - button "Alegoría · Bloqueada" [ref=e159]
+          - generic:
+            - generic: Alegoría
+            - generic: Bloqueada
+        - generic [ref=e164]:
+          - button "Cosmovisión · Bloqueada" [ref=e165]
+          - generic:
+            - generic: Cosmovisión
+            - generic: Bloqueada
+        - generic [ref=e170]:
+          - button "Catarsis · Bloqueada" [ref=e171]
+          - generic:
+            - generic: Catarsis
+            - generic: Bloqueada
+        - generic [ref=e175]:
+          - button "Falacia · Disponible" [ref=e176]
+          - generic: T1
+          - generic:
+            - generic: Falacia
+            - generic: Disponible
+        - generic [ref=e184]:
+          - button "Sofisma · Bloqueada" [ref=e185]
+          - generic:
+            - generic: Sofisma
+            - generic: Bloqueada
+        - generic [ref=e189]:
+          - button "Dialéctica · Bloqueada" [ref=e190]
+          - generic:
+            - generic: Dialéctica
+            - generic: Bloqueada
+        - generic [ref=e195]:
+          - button "Hegemonía · Bloqueada" [ref=e196]
+          - generic:
+            - generic: Hegemonía
+            - generic: Bloqueada
+        - generic [ref=e200]:
+          - button "Pragmatismo · Bloqueada" [ref=e201]
+          - generic:
+            - generic: Pragmatismo
+            - generic: Bloqueada
+        - generic [ref=e207]:
+          - button "Paradigma · Oxidada · Nv.1" [ref=e208]
+          - generic:
+            - generic: Paradigma
+            - generic: Oxidada · Nv.1
+        - generic [ref=e212]:
+          - button "Heurística · Disponible" [ref=e213]
+          - generic: T2
+          - generic:
+            - generic: Heurística
+            - generic: Disponible
+        - generic [ref=e218]:
+          - button "Sinergia · Disponible" [ref=e219]
+          - generic: T2
+          - generic:
+            - generic: Sinergia
+            - generic: Disponible
+        - generic [ref=e228]:
+          - button "Resiliencia · Bloqueada" [ref=e229]
+          - generic:
+            - generic: Resiliencia
+            - generic: Bloqueada
+        - generic [ref=e233]:
+          - button "Escalabilidad · Bloqueada" [ref=e234]
+          - generic:
+            - generic: Escalabilidad
+            - generic: Bloqueada

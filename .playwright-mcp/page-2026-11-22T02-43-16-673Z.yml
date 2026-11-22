@@ -1,0 +1,49 @@
+- main [ref=e4]:
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - img [aria-hidden] [ref=e12]:
+        - generic [ref=e19]: L9
+      - generic [ref=e22]:
+        - button "LexiRunner_99" [ref=e23]
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - text: ELO
+            - strong [ref=e30]: "1000"
+          - generic [aria-hidden] [ref=e31]: ·
+          - generic [ref=e32]:
+            - strong [ref=e33]: "1"
+            - text: /15
+    - generic [ref=e34]:
+      - button "Demo Presets" [ref=e36]
+      - button "Contraer esfera" [ref=e40]
+    - generic [ref=e46]:
+      - generic [ref=e47]:
+        - generic [ref=e48]: Vocabulario Activo · RPG
+        - heading [level=1] [ref=e50]:
+          - button "Skillable" [ref=e51] [cursor=pointer]:
+            - generic [aria-hidden] [ref=e52]:
+              - generic [ref=e53]: S
+              - generic [ref=e55]: k
+              - generic [ref=e57]: i
+              - generic [ref=e59]: l
+              - generic [ref=e61]: l
+              - generic [ref=e63]: a
+              - generic [ref=e65]: b
+              - generic [ref=e67]: l
+              - generic [ref=e69]: V
+      - generic [ref=e71]:
+        - button [aria-hidden]:
+          - generic:
+            - generic:
+              - paragraph: 01 · Grafo RPG
+              - paragraph: Árbol de Skills
+        - button [aria-hidden]:
+          - generic:
+            - generic:
+              - paragraph: 02 · Descubrir
+              - paragraph: Expedición Aleatoria
+        - button [aria-hidden]:
+          - generic:
+            - generic:
+              - paragraph: 03 · Tiempo Real
+              - paragraph: Arena 1v1
