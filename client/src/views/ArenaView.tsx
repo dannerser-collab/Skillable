@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { QRCodeSVG } from 'qrcode.react';
 import {
@@ -42,6 +42,7 @@ import { ScrambleText } from '../components/ScrambleText.tsx';
 import { ScoreBars } from '../components/ScoreBars.tsx';
 import { useArenaSocket } from '../hooks/useArenaSocket.ts';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition.ts';
+import { STUDIO_EASE, VIEW_TRANSITION, VIEW_VARIANTS } from '../utils/motion.ts';
 import { validateSentence } from '../utils/textValidation.ts';
 
 const ROUND_MODE_LABELS: Record<Challenge['mode'], string> = {
@@ -252,14 +253,28 @@ export function ArenaView({
     return () => window.clearInterval(id);
   }, [roomState?.phase, currentRound?.index]);
 
+  const arenaPhaseKey =
+    !roomState && pendingRoomCode && !hasCustomNickname
+      ? 'qr-gate'
+      : !roomState
+        ? 'lobby'
+        : roomState.phase === 'waiting' || roomState.phase === 'ready'
+          ? 'waiting'
+          : roomState.phase === 'round' || roomState.phase === 'judging'
+            ? 'round'
+            : roomState.phase === 'verdict'
+              ? 'verdict'
+              : 'finished';
+
   return (
     <motion.section
       key="arena-view"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
-      transition={{ duration: 0.25 }}
-      className="mx-auto max-w-5xl px-3 pb-14 pt-28 sm:px-6 sm:pb-16 md:pt-24"
+      variants={VIEW_VARIANTS}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={VIEW_TRANSITION}
+      className="mx-auto max-w-5xl px-3 pb-10 pt-28 sm:px-6 sm:pb-12 md:pt-20"
     >
       {/* Cabecera de estado Socket.IO */}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-2.5">
@@ -315,8 +330,16 @@ export function ArenaView({
         </div>
       )}
 
-      {/* ── FLUJO ?room=XXXX SIN NICKNAME PERSONALIZADO (Enfocado para QR móvil) ── */}
-      {!roomState && pendingRoomCode && !hasCustomNickname ? (
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={arenaPhaseKey}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.24, ease: STUDIO_EASE }}
+        >
+          {/* ── FLUJO ?room=XXXX SIN NICKNAME PERSONALIZADO (Enfocado para QR móvil) ── */}
+          {!roomState && pendingRoomCode && !hasCustomNickname ? (
         <div className="glass-panel mx-auto max-w-md rounded-2xl border border-accent/55 p-5 shadow-[0_0_32px_rgba(244,156,59,0.14)] sm:p-6">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-accent/50 bg-accent/15 px-3 py-0.5 font-mono text-[11px] font-bold uppercase tracking-wider text-accent">
             Sala QR · {pendingRoomCode}
@@ -525,8 +548,8 @@ export function ArenaView({
       {roomState && (roomState.phase === 'waiting' || roomState.phase === 'ready') && (
         <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-12">
           {/* Código y QR */}
-          <div className="glass-panel flex flex-col items-center justify-between gap-4 rounded-2xl p-4 text-center sm:p-6 lg:col-span-5">
-            <div>
+          <div className="glass-panel flex min-w-0 flex-col items-center justify-between gap-4 rounded-2xl p-4 text-center sm:p-6 lg:col-span-5">
+            <div className="w-full min-w-0">
               <p className="font-mono text-[11px] uppercase tracking-widest text-secondary">
                 Código de Sala
               </p>
@@ -535,11 +558,11 @@ export function ArenaView({
               </div>
             </div>
 
-            <div className="rounded-2xl border border-ink/30 bg-ink p-3 shadow-lg">
+            <div className="mx-auto flex w-fit max-w-full items-center justify-center rounded-2xl border border-accent/35 bg-ink p-3.5 shadow-[0_0_28px_rgba(244,156,59,0.16)] sm:p-4">
               <QRCodeSVG
                 value={`${window.location.origin}/?room=${roomState.code}`}
-                size={160}
-                className="h-auto max-w-full"
+                size={168}
+                className="h-auto w-[156px] max-w-full sm:w-[168px]"
                 bgColor="#f7f2ec"
                 fgColor="#14151a"
                 marginSize={1}
@@ -547,8 +570,8 @@ export function ArenaView({
               />
             </div>
 
-            <div className="w-full space-y-2">
-              <p className="break-all rounded-lg border border-surface bg-base/80 px-3 py-1.5 font-mono text-[11px] text-secondary sm:truncate">
+            <div className="w-full min-w-0 space-y-2">
+              <p className="w-full min-w-0 break-all rounded-lg border border-surface bg-base/80 px-3 py-1.5 font-mono text-[11px] text-secondary sm:truncate">
                 {`${window.location.origin}/?room=${roomState.code}`}
               </p>
               <button
@@ -572,7 +595,7 @@ export function ArenaView({
           </div>
 
           {/* Slots de jugadores y acciones */}
-          <div className="glass-panel flex flex-col justify-between gap-5 rounded-2xl p-4 sm:p-6 lg:col-span-7">
+          <div className="glass-panel flex min-w-0 flex-col justify-between gap-5 rounded-2xl p-4 sm:p-6 lg:col-span-7">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-lg font-bold text-ink">
@@ -1196,6 +1219,8 @@ export function ArenaView({
           </div>
         </div>
       )}
+        </motion.div>
+      </AnimatePresence>
     </motion.section>
   );
 }

@@ -1,16 +1,31 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
   Award,
   BookOpen,
+  Combine,
+  Compass,
   Cpu,
+  Crown,
+  Drama,
+  Feather,
+  Flame,
+  Ghost,
+  Globe,
+  Hammer,
+  Landmark,
+  Lightbulb,
   Lock,
   MessageSquareQuote,
+  MessagesSquare,
   Scale,
+  Shield,
+  Shuffle,
   Sparkles,
-  Star,
   Swords,
+  TrendingUp,
   Wrench,
   X,
 } from 'lucide-react';
@@ -24,14 +39,45 @@ import {
 } from '../../../shared/types.ts';
 import { BRANCH_META } from '../data/fallbackSkills.ts';
 import { ScrambleText } from '../components/ScrambleText.tsx';
-import { getNextSoloTargetLevel, getSkillNodeStatus } from '../utils/textValidation.ts';
+import { STUDIO_EASE, VIEW_TRANSITION, VIEW_VARIANTS } from '../utils/motion.ts';
+import {
+  buildBranchLayout,
+  buildFullLayout,
+  type Pt,
+  type TreeLayout,
+} from '../utils/skillTreeLayout.ts';
+import {
+  getNextSoloTargetLevel,
+  getSkillNodeStatus,
+  type DerivedSkillStatus,
+} from '../utils/textValidation.ts';
 
 export type TreeFilter = 'all' | Branch;
 
-const BRANCH_ICONS: Record<Branch, typeof BookOpen> = {
+type IconType = typeof BookOpen;
+
+const BRANCH_ICONS: Record<Branch, IconType> = {
   narrativa: BookOpen,
   retorica: Scale,
   estrategia: Cpu,
+};
+
+const SKILL_ICONS: Record<string, IconType> = {
+  mitologia: Landmark,
+  arquetipo: Drama,
+  alegoria: Feather,
+  cosmovision: Globe,
+  catarsis: Flame,
+  falacia: Shuffle,
+  sofisma: Ghost,
+  dialectica: MessagesSquare,
+  hegemonia: Crown,
+  pragmatismo: Hammer,
+  paradigma: Lightbulb,
+  heuristica: Compass,
+  sinergia: Combine,
+  resiliencia: Shield,
+  escalabilidad: TrendingUp,
 };
 
 const LEVEL_NAMES: Record<SkillLevel, string> = {
@@ -41,22 +87,57 @@ const LEVEL_NAMES: Record<SkillLevel, string> = {
   3: 'Nv.3 Maestría',
 };
 
-function getNodePosition(skill: Skill, filter: TreeFilter): { x: number; y: number } {
-  if (filter !== 'all') {
-    return { x: skill.posX, y: skill.posY };
-  }
-  const branchIndex = BRANCH_META.findIndex((b) => b.id === skill.branch);
-  const col = branchIndex >= 0 ? branchIndex : 0;
-  // En vista "Todas" ampliamos la separación horizontal de Tier 2 y Tier 3 para que nunca se solapen
-  const spreadX =
-    skill.posX === 50
-      ? 50
-      : Math.max(22, Math.min(78, 50 + (skill.posX - 50) * 1.9));
-  return {
-    x: col * 33.333 + (spreadX / 100) * 33.333,
-    y: skill.posY,
-  };
+/** Ancho a partir del cual "Todas" se dibuja como una sola constelación de 3 ramas. */
+const FULL_LAYOUT_MIN_WIDTH = 960;
+const BRANCH_STAGE_MAX_SCALE = 1.2;
+
+const STAR = '#f7f2ec';
+const LOCKED_LINE = 'rgba(247, 242, 236, 0.22)';
+
+/* ── Utilidades ──────────────────────────────────────────────────────────── */
+
+function useElementWidth<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(() =>
+    typeof window === 'undefined' ? 1200 : Math.max(320, window.innerWidth - 48),
+  );
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    setWidth(el.clientWidth);
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width] as const;
 }
+
+/** Nodo + todos sus ancestros y descendientes (la "constelación" conectada). */
+function connectedSet(skills: Skill[], id: string | null): Set<string> {
+  const set = new Set<string>();
+  if (!id) return set;
+  const byId = new Map(skills.map((s) => [s.id, s]));
+  const children = new Map<string, string[]>();
+  for (const s of skills) {
+    for (const p of s.parentIds) children.set(p, [...(children.get(p) ?? []), s.id]);
+  }
+  const walk = (start: string, next: (x: string) => string[]) => {
+    const stack = [start];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      if (set.has(cur) && cur !== start) continue;
+      set.add(cur);
+      stack.push(...next(cur).filter((n) => !set.has(n)));
+    }
+  };
+  walk(id, (x) => byId.get(x)?.parentIds ?? []);
+  walk(id, (x) => children.get(x) ?? []);
+  return set;
+}
+
+const toPoints = (pts: Pt[]) => pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+
+/* ── Vista principal ─────────────────────────────────────────────────────── */
 
 export function SkillTreeView({
   skills,
@@ -82,6 +163,7 @@ export function SkillTreeView({
   onStartDuelWithSkill: (skillId: string) => void;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [canvasRef, canvasWidth] = useElementWidth<HTMLDivElement>();
 
   const visibleSkills = useMemo(
     () => (activeFilter === 'all' ? skills : skills.filter((s) => s.branch === activeFilter)),
@@ -98,70 +180,56 @@ export function SkillTreeView({
     const unlocked = visibleSkills.filter((s) => (userSkills[s.id]?.level ?? 0) >= 1).length;
     const levelSum = visibleSkills.reduce((acc, s) => acc + (userSkills[s.id]?.level ?? 0), 0);
     const maxSum = Math.max(1, total * 3);
-    return {
-      total,
-      unlocked,
-      masteryPct: Math.round((levelSum / maxSum) * 100),
-    };
+    return { total, unlocked, masteryPct: Math.round((levelSum / maxSum) * 100) };
   }, [userSkills, visibleSkills]);
 
-  const edges = useMemo(() => {
-    const map = new Map(visibleSkills.map((s) => [s.id, s]));
-    const list: Array<{
-      id: string;
-      parentId: string;
-      from: { x: number; y: number };
-      to: { x: number; y: number };
-      parentUnlocked: boolean;
-      highlighted: boolean;
-      isNewlyUnlocked: boolean;
-    }> = [];
+  const branchIds = useMemo(() => BRANCH_META.map((b) => b.id), []);
+  const useFull = activeFilter === 'all' && canvasWidth >= FULL_LAYOUT_MIN_WIDTH;
 
-    for (const child of visibleSkills) {
-      const childPos = getNodePosition(child, activeFilter);
+  // Escenarios a dibujar: una constelación completa, o una por rama (filtro / móvil).
+  const stages = useMemo(() => {
+    if (useFull) return [{ key: 'full', layout: buildFullLayout(skills, branchIds) }];
+    const list = activeFilter === 'all' ? branchIds : [activeFilter];
+    return list.map((b) => ({ key: b, layout: buildBranchLayout(skills, b) }));
+  }, [activeFilter, branchIds, skills, useFull]);
 
-      for (const parentId of child.parentIds) {
-        const parent = map.get(parentId);
-        if (!parent) continue;
-        const parentPos = getNodePosition(parent, activeFilter);
-        const parentLevel = userSkills[parent.id]?.level ?? 0;
-        const highlighted =
-          hoveredId === child.id ||
-          hoveredId === parent.id ||
-          selectedSkillId === child.id ||
-          selectedSkillId === parent.id;
-        const parentUnlocked = parentLevel >= 1;
+  const focus = useMemo(() => connectedSet(skills, hoveredId), [hoveredId, skills]);
 
-        list.push({
-          id: `${parent.id}->${child.id}`,
-          parentId: parent.id,
-          from: parentPos,
-          to: childPos,
-          parentUnlocked,
-          highlighted,
-          isNewlyUnlocked: parentUnlocked && recentlyUpgradedSkillId === parent.id,
-        });
-      }
-    }
-    return list;
-  }, [activeFilter, hoveredId, recentlyUpgradedSkillId, selectedSkillId, userSkills, visibleSkills]);
+  const derivedById = useMemo(() => {
+    const map: Record<string, DerivedSkillStatus> = {};
+    for (const s of skills) map[s.id] = getSkillNodeStatus(s, userSkills, skills);
+    return map;
+  }, [skills, userSkills]);
 
-  const selectedDerived = selectedSkill
-    ? getSkillNodeStatus(selectedSkill, userSkills, skills)
-    : null;
-  const selectedRecord = selectedSkill ? userSkills[selectedSkill.id] : undefined;
+  // Drawer en el lado opuesto al nodo seleccionado (escritorio) para no taparlo.
+  const drawerSide: 'left' | 'right' = useMemo(() => {
+    if (!selectedSkillId || stages.length !== 1) return 'right';
+    const { layout } = stages[0];
+    const p = layout.nodes[selectedSkillId];
+    return p && p.x > layout.stage.width / 2 ? 'left' : 'right';
+  }, [selectedSkillId, stages]);
+
+  useEffect(() => {
+    if (!selectedSkillId) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onSelectSkill(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onSelectSkill, selectedSkillId]);
 
   return (
     <motion.section
       key="tree-view"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
-      transition={{ duration: 0.25 }}
-      className="mx-auto max-w-7xl px-4 pb-16 pt-28 sm:px-6 md:pt-24"
+      variants={VIEW_VARIANTS}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={VIEW_TRANSITION}
+      className="mx-auto max-w-7xl px-4 pb-8 pt-28 sm:px-6 md:pb-6 md:pt-20"
     >
       {/* Cabecera de controles */}
-      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -178,11 +246,8 @@ export function SkillTreeView({
           {BRANCH_META.map((branch) => {
             const Icon = BRANCH_ICONS[branch.id];
             const branchSkills = skills.filter((s) => s.branch === branch.id);
-            const branchUnlocked = branchSkills.filter(
-              (s) => (userSkills[s.id]?.level ?? 0) >= 1,
-            ).length;
+            const branchUnlocked = branchSkills.filter((s) => (userSkills[s.id]?.level ?? 0) >= 1).length;
             const active = activeFilter === branch.id;
-
             return (
               <button
                 key={branch.id}
@@ -204,7 +269,7 @@ export function SkillTreeView({
           })}
         </div>
 
-        {/* Barra de progreso y leyenda */}
+        {/* Progreso + leyenda de estados */}
         <div className="glass-panel flex flex-wrap items-center gap-4 rounded-xl px-4 py-2.5">
           <div className="min-w-[195px]">
             <div className="mb-1 flex items-center justify-between gap-3 font-mono text-[11px]">
@@ -223,486 +288,844 @@ export function SkillTreeView({
 
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-secondary">
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-surface" /> Nv.0
+              <span className="h-3 w-3 rounded-full bg-accent shadow-[0_0_8px_rgba(244,156,59,0.7)]" /> Dominada
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-secondary" /> Nv.1
+              <span className="h-3 w-3 rounded-full border-2 border-accent bg-base" /> Disponible
             </span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-ink" /> Nv.2
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-accent" /> Nv.3
+              <span className="h-3 w-3 rounded-full border border-secondary/50 bg-base/60" /> Bloqueada
             </span>
             <span className="inline-flex items-center gap-1.5 text-danger">
-              <span className="h-2.5 w-2.5 rounded-full bg-danger" /> Oxidada
+              <span className="h-3 w-3 rounded-full border-2 border-danger bg-base" /> Oxidada
             </span>
           </div>
         </div>
       </div>
 
-      {/* Lienzo + Drawer lateral */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <div
-          className={`glass-panel relative overflow-x-auto rounded-2xl p-4 sm:p-5 ${
-            selectedSkill ? 'lg:col-span-7 xl:col-span-8' : 'lg:col-span-12'
-          }`}
+      {/* Lienzo de constelación */}
+      <div className="glass-panel relative overflow-hidden rounded-2xl p-3 sm:p-5">
+        <div ref={canvasRef} className="flex w-full flex-col items-center gap-6">
+          {stages.map(({ key, layout }, stageIndex) => {
+            const scale = useFull
+              ? Math.min(1, canvasWidth / layout.stage.width)
+              : Math.min(BRANCH_STAGE_MAX_SCALE, canvasWidth / layout.stage.width);
+            return (
+              <ConstellationStage
+                key={`${key}-${activeFilter}`}
+                layout={layout}
+                scale={scale}
+                stageIndex={stageIndex}
+                skills={skills}
+                userSkills={userSkills}
+                derivedById={derivedById}
+                focus={focus}
+                hoveredId={hoveredId}
+                onHover={setHoveredId}
+                selectedSkillId={selectedSkillId}
+                onSelect={(id) => onSelectSkill(id)}
+                recentlyUpgradedSkillId={recentlyUpgradedSkillId}
+                recentlyUpgradedLevel={recentlyUpgradedLevel ?? null}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <SkillDrawer
+            skill={selectedSkill}
+            derived={selectedSkill ? derivedById[selectedSkill.id] : null}
+            record={selectedSkill ? userSkills[selectedSkill.id] : undefined}
+            side={drawerSide}
+            onClose={() => onSelectSkill(null)}
+            onSelectSkill={onSelectSkill}
+            onProveSkill={onProveSkill}
+            onStartDuelWithSkill={onStartDuelWithSkill}
+          />,
+          document.body,
+        )}
+    </motion.section>
+  );
+}
+
+/* ── Escenario de constelación (SVG + nodos HTML en el mismo sistema) ────── */
+
+function ConstellationStage({
+  layout,
+  scale,
+  stageIndex,
+  skills,
+  userSkills,
+  derivedById,
+  focus,
+  hoveredId,
+  onHover,
+  selectedSkillId,
+  onSelect,
+  recentlyUpgradedSkillId,
+  recentlyUpgradedLevel,
+}: {
+  layout: TreeLayout;
+  scale: number;
+  stageIndex: number;
+  skills: Skill[];
+  userSkills: Record<string, UserSkill>;
+  derivedById: Record<string, DerivedSkillStatus>;
+  focus: Set<string>;
+  hoveredId: string | null;
+  onHover: (id: string | null) => void;
+  selectedSkillId: string | null;
+  onSelect: (id: string) => void;
+  recentlyUpgradedSkillId: string | null;
+  recentlyUpgradedLevel: SkillLevel | null;
+}) {
+  const uid = useId().replace(/:/g, '');
+  const glowId = `glow-${uid}`;
+  const haloId = `halo-${uid}`;
+  const { stage } = layout;
+
+  const stageSkills = useMemo(() => skills.filter((s) => layout.nodes[s.id]), [layout.nodes, skills]);
+  const level = (id: string) => userSkills[id]?.level ?? 0;
+  const hasFocus = focus.size > 0;
+  const hoveredBranch = hoveredId ? skills.find((s) => s.id === hoveredId)?.branch : undefined;
+  const baseDelay = 0.12 + stageIndex * 0.12;
+  const tierDelay = (tier: number) => baseDelay + 0.18 + (tier - 1) * 0.16;
+
+  const edgeState = (e: TreeLayout['edges'][number]) => {
+    let active: boolean;
+    let inFocus: boolean;
+    if (e.parentId && e.childId) {
+      active = level(e.parentId) >= 1;
+      inFocus = focus.has(e.parentId) && focus.has(e.childId);
+    } else if (e.childId) {
+      active = level(e.childId) >= 1;
+      inFocus = focus.has(e.childId);
+    } else {
+      active = stageSkills.some((s) => s.branch === e.branch && level(s.id) >= 1);
+      inFocus = hoveredBranch === e.branch;
+    }
+    return { active, inFocus, dim: hasFocus && !inFocus };
+  };
+
+  const childTier = (e: TreeLayout['edges'][number]) =>
+    e.childId ? (skills.find((s) => s.id === e.childId)?.tier ?? 1) : 0;
+
+  return (
+    <div className="relative" style={{ width: stage.width * scale, height: stage.height * scale }}>
+      <div
+        className="absolute left-0 top-0 origin-top-left"
+        style={{ width: stage.width, height: stage.height, transform: `scale(${scale})` }}
+      >
+        <svg
+          width={stage.width}
+          height={stage.height}
+          viewBox={`0 0 ${stage.width} ${stage.height}`}
+          className="pointer-events-none absolute inset-0 overflow-visible"
+          aria-hidden="true"
         >
-          <div
-            className={`relative h-[520px] sm:h-[560px] ${
-              activeFilter === 'all' ? 'min-w-[960px]' : 'min-w-[320px]'
-            }`}
-          >
-            {/* Cabeceras de columnas en vista Todas */}
-            {activeFilter === 'all' && (
-              <div className="pointer-events-none absolute inset-x-0 top-1 z-10 grid grid-cols-3 text-center">
-                {BRANCH_META.map((branch) => (
-                  <span
-                    key={branch.id}
-                    className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-secondary"
-                  >
-                    {branch.label}
-                  </span>
-                ))}
-              </div>
-            )}
+          <defs>
+            <filter id={glowId} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3.2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <radialGradient id={haloId}>
+              <stop offset="0%" stopColor={STAR} stopOpacity="0.9" />
+              <stop offset="35%" stopColor={STAR} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={STAR} stopOpacity="0" />
+            </radialGradient>
+          </defs>
 
-            {/* Conectores SVG reactivos */}
-            <svg
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              className="pointer-events-none absolute inset-0 h-full w-full"
-              aria-hidden="true"
+          {/* Tronco común */}
+          {layout.trunk && (
+            <motion.g initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: baseDelay, duration: 0.4 }}>
+              <line
+                x1={layout.trunk.bottom.x}
+                y1={layout.trunk.bottom.y}
+                x2={layout.trunk.fork.x}
+                y2={layout.trunk.fork.y}
+                stroke={stageSkills.some((s) => level(s.id) >= 1) ? STAR : LOCKED_LINE}
+                strokeWidth={1.6}
+                filter={stageSkills.some((s) => level(s.id) >= 1) ? `url(#${glowId})` : undefined}
+              />
+              <StarGlint p={layout.trunk.bottom} haloId={haloId} size={12} bright />
+              <StarGlint p={layout.trunk.fork} haloId={haloId} size={9} bright delay={0.6} />
+            </motion.g>
+          )}
+
+          {/* Rutas */}
+          {layout.edges.map((edge, i) => {
+            const { active, inFocus, dim } = edgeState(edge);
+            const pts = toPoints(edge.points);
+            const delay = edge.childId ? tierDelay(childTier(edge)) - 0.08 : baseDelay + 0.05;
+            return (
+              <g
+                key={edge.id}
+                style={{ opacity: dim ? 0.32 : 1, transition: 'opacity 260ms ease-out' }}
+              >
+                {active ? (
+                  <>
+                    <motion.polyline
+                      points={pts}
+                      fill="none"
+                      stroke={PALETTE.accent}
+                      strokeWidth={inFocus ? 5 : 3.6}
+                      strokeOpacity={inFocus ? 0.6 : 0.32}
+                      strokeLinejoin="miter"
+                      filter={`url(#${glowId})`}
+                      initial={{ pathLength: 0 }}
+                      animate={{ pathLength: 1 }}
+                      transition={{ delay, duration: 0.6, ease: STUDIO_EASE }}
+                    />
+                    <motion.polyline
+                      points={pts}
+                      fill="none"
+                      stroke={STAR}
+                      strokeWidth={inFocus ? 2 : 1.5}
+                      strokeLinejoin="miter"
+                      initial={{ pathLength: 0 }}
+                      animate={{ pathLength: 1 }}
+                      transition={{ delay, duration: 0.6, ease: STUDIO_EASE }}
+                    />
+                    <polyline
+                      points={pts}
+                      fill="none"
+                      stroke="#ffffff"
+                      strokeWidth={2.4}
+                      strokeLinecap="round"
+                      pathLength={100}
+                      strokeDasharray="3 97"
+                      className="animate-star-travel"
+                      style={{ animationDelay: `${(i % 7) * 0.45}s` }}
+                      filter={`url(#${glowId})`}
+                    />
+                  </>
+                ) : (
+                  <motion.polyline
+                    points={pts}
+                    fill="none"
+                    stroke={inFocus ? 'rgba(247, 242, 236, 0.6)' : LOCKED_LINE}
+                    strokeWidth={inFocus ? 1.4 : 1}
+                    strokeLinejoin="miter"
+                    initial={{ pathLength: 0 }}
+                    animate={{ pathLength: 1 }}
+                    transition={{ delay, duration: 0.55, ease: STUDIO_EASE }}
+                  />
+                )}
+              </g>
+            );
+          })}
+
+          {/* Destellos en vértices intermedios */}
+          {layout.vertices.map((v, i) => (
+            <motion.g
+              key={`v-${i}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: hasFocus ? 0.5 : 1 }}
+              transition={{ delay: baseDelay + 0.5 + (i % 6) * 0.04, duration: 0.4 }}
             >
-              {edges.map((edge) => {
-                const midY = (edge.from.y + edge.to.y) / 2;
-                const d = `M ${edge.from.x} ${edge.from.y} C ${edge.from.x} ${midY}, ${edge.to.x} ${midY}, ${edge.to.x} ${edge.to.y}`;
+              <circle cx={v.x} cy={v.y} r={6} fill={`url(#${haloId})`} opacity={0.55} />
+              <circle
+                cx={v.x}
+                cy={v.y}
+                r={1.6}
+                fill={STAR}
+                className="animate-star-twinkle"
+                style={{ animationDelay: `${(i * 0.37) % 2.8}s` }}
+              />
+            </motion.g>
+          ))}
 
-                if (!edge.parentUnlocked) {
-                  return (
-                    <path
-                      key={edge.id}
-                      d={d}
-                      fill="none"
-                      vectorEffect="non-scaling-stroke"
-                      stroke={PALETTE.surface}
-                      strokeWidth={edge.highlighted ? 2.4 : 1.75}
-                      strokeDasharray="6 6"
-                      opacity={0.82}
-                    />
-                  );
-                }
+          {/* Bases de rama */}
+          {layout.anchors.map((a) => (
+            <g key={`base-${a.branch}`}>
+              <circle cx={a.base.x} cy={a.base.y} r={7} fill="none" stroke="rgba(247,242,236,0.35)" strokeWidth={1} />
+              <StarGlint p={a.base} haloId={haloId} size={11} bright delay={0.3} />
+            </g>
+          ))}
 
-                // Al desbloquear el nodo padre (Nv.1+), la línea SVG se ilumina en ámbar (#f49c3b)
-                const activeStroke = PALETTE.accent;
+          {/* Destellos de cada nodo (esquina superior derecha) */}
+          {stageSkills.map((s, i) => {
+            const p = layout.nodes[s.id];
+            const r = (s.tier === 2 ? stage.nodeSm : stage.nodeLg) / 2;
+            const lit = level(s.id) >= 1 || derivedById[s.id]?.status === 'available';
+            return (
+              <StarGlint
+                key={`g-${s.id}`}
+                p={{ x: p.x + r * 0.74, y: p.y - r * 0.74 }}
+                haloId={haloId}
+                size={lit ? 9 : 6}
+                bright={lit}
+                delay={(i * 0.41) % 2.8}
+              />
+            );
+          })}
+        </svg>
 
-                return (
-                  <g key={edge.id}>
-                    <path
-                      d={d}
-                      fill="none"
-                      vectorEffect="non-scaling-stroke"
-                      stroke={activeStroke}
-                      strokeWidth={edge.isNewlyUnlocked ? 8 : edge.highlighted ? 6 : 4.5}
-                      opacity={edge.isNewlyUnlocked ? 0.34 : 0.22}
-                    />
-                    <path
-                      d={d}
-                      fill="none"
-                      vectorEffect="non-scaling-stroke"
-                      stroke={activeStroke}
-                      strokeWidth={edge.isNewlyUnlocked ? 2.8 : edge.highlighted ? 2.6 : 2}
-                      strokeDasharray="8 6"
-                      className="animate-dash-flow"
-                      opacity={0.98}
-                    />
-                    {edge.isNewlyUnlocked && (
-                      <motion.path
-                        d={d}
-                        fill="none"
-                        vectorEffect="non-scaling-stroke"
-                        stroke={PALETTE.accent}
-                        strokeWidth={3.5}
-                        initial={{ pathLength: 0, opacity: 1 }}
-                        animate={{ pathLength: 1, opacity: 0.92 }}
-                        transition={{ duration: 0.85, ease: 'easeOut' }}
-                      />
-                    )}
-                  </g>
-                );
-              })}
-            </svg>
+        {/* Etiquetas de rama + contador grande en la base */}
+        {layout.anchors.map((a) => {
+          const meta = BRANCH_META.find((b) => b.id === a.branch);
+          const Icon = BRANCH_ICONS[a.branch];
+          const branchSkills = skills.filter((s) => s.branch === a.branch);
+          const unlocked = branchSkills.filter((s) => level(s.id) >= 1).length;
+          const points = branchSkills.reduce((acc, s) => acc + level(s.id), 0);
+          const pos =
+            a.labelSide === 'left'
+              ? { right: stage.width - a.base.x + 22, top: a.base.y, transform: 'translateY(-50%)', textAlign: 'right' as const }
+              : a.labelSide === 'right'
+                ? { left: a.base.x + 22, top: a.base.y, transform: 'translateY(-50%)', textAlign: 'left' as const }
+                : { left: a.base.x, top: a.base.y + 16, transform: 'translateX(-50%)', textAlign: 'center' as const };
+          return (
+            <motion.div
+              key={`label-${a.branch}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: baseDelay + 0.1, duration: 0.4, ease: STUDIO_EASE }}
+              className="pointer-events-none absolute whitespace-nowrap"
+              style={{ ...pos }}
+            >
+              <div
+                className={`flex items-center gap-1.5 font-mono font-semibold uppercase tracking-[0.16em] text-secondary ${
+                  a.labelSide === 'below' ? 'text-[13px]' : 'text-[11px]'
+                } ${
+                  a.labelSide === 'left' ? 'justify-end' : a.labelSide === 'below' ? 'justify-center' : ''
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 text-accent" />
+                {meta?.label}
+              </div>
+              <div
+                className={`font-display font-bold leading-none text-ink ${a.labelSide === 'below' ? 'text-[38px]' : 'text-[30px]'}`}
+              >
+                <span className="text-accent">{unlocked}</span>
+                <span className="text-secondary">/{branchSkills.length}</span>
+              </div>
+              <div className={`mt-0.5 font-mono text-secondary ${a.labelSide === 'below' ? 'text-[12px]' : 'text-[10px]'}`}>{points}/{branchSkills.length * 3} pts maestría</div>
+            </motion.div>
+          );
+        })}
 
-            {/* Nodos */}
-            {visibleSkills.map((skill) => {
-              const pos = getNodePosition(skill, activeFilter);
-              const derived = getSkillNodeStatus(skill, userSkills, skills);
-              const isSelected = selectedSkillId === skill.id;
-              const isRecentlyUpgraded = recentlyUpgradedSkillId === skill.id;
-              const isNewlyUnlockedChild =
+        {/* Nodos */}
+        {stageSkills.map((skill) => {
+          const p = layout.nodes[skill.id];
+          const derived = derivedById[skill.id];
+          return (
+            <SkillNode
+              key={skill.id}
+              skill={skill}
+              pos={p}
+              size={skill.tier === 2 ? stage.nodeSm : stage.nodeLg}
+              labelPx={stage.labelPx}
+              derived={derived}
+              delay={tierDelay(skill.tier) + (skill.posX / 100) * 0.08}
+              dimmed={hasFocus && !focus.has(skill.id)}
+              hovered={hoveredId === skill.id}
+              selected={selectedSkillId === skill.id}
+              recentlyUpgraded={recentlyUpgradedSkillId === skill.id}
+              recentlyUpgradedLevel={recentlyUpgradedLevel}
+              newlyUnlocked={
                 Boolean(recentlyUpgradedSkillId) &&
                 derived.status === 'available' &&
-                skill.parentIds.includes(recentlyUpgradedSkillId!);
-              const upgradedBadgeLabel =
-                (recentlyUpgradedLevel ?? derived.level) === 3
-                  ? '★ MAESTRÍA NV.3'
-                  : `¡LEVEL UP! NV.${recentlyUpgradedLevel ?? derived.level}`;
-              const levelColor = LEVEL_COLORS[derived.level];
+                skill.parentIds.includes(recentlyUpgradedSkillId!)
+              }
+              onHover={onHover}
+              onSelect={onSelect}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-              const borderClass =
-                derived.status === 'rusty'
-                  ? 'border-danger/85 bg-base/95 shadow-[0_0_22px_rgba(224,82,99,0.28)]'
-                  : derived.level === 3
-                    ? 'border-accent bg-base/95 shadow-[0_0_24px_rgba(244,156,59,0.3)]'
-                    : derived.level === 2
-                      ? 'border-ink/85 bg-base/95 shadow-[0_0_16px_rgba(247,242,236,0.16)]'
-                      : derived.level === 1
-                        ? 'border-secondary bg-base/95'
-                        : isNewlyUnlockedChild
-                          ? 'border-accent/85 bg-base/95 shadow-[0_0_18px_rgba(244,156,59,0.28)]'
-                          : derived.status === 'available'
-                            ? 'border-dashed border-secondary/80 bg-base/90 hover:border-accent'
-                            : 'border-surface/90 bg-base/80 opacity-75';
+/** Estrella con halo radial + micro cruz de brillo. */
+function StarGlint({
+  p,
+  haloId,
+  size,
+  bright = false,
+  delay = 0,
+}: {
+  p: Pt;
+  haloId: string;
+  size: number;
+  bright?: boolean;
+  delay?: number;
+}) {
+  const arm = size / 2;
+  return (
+    <g className="animate-star-twinkle" style={{ animationDelay: `${delay}s`, opacity: bright ? 1 : 0.45 }}>
+      <circle cx={p.x} cy={p.y} r={size * 0.75} fill={`url(#${haloId})`} opacity={bright ? 0.8 : 0.4} />
+      <line x1={p.x - arm} y1={p.y} x2={p.x + arm} y2={p.y} stroke={STAR} strokeWidth={0.9} strokeLinecap="round" />
+      <line x1={p.x} y1={p.y - arm} x2={p.x} y2={p.y + arm} stroke={STAR} strokeWidth={0.9} strokeLinecap="round" />
+      <circle cx={p.x} cy={p.y} r={1.5} fill={STAR} />
+    </g>
+  );
+}
 
-              return (
-                <div
-                  key={skill.id}
-                  style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                  className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
-                >
-                  {isRecentlyUpgraded && (
-                    <>
-                      <div className="pointer-events-none absolute -inset-3 rounded-3xl bg-accent/25 blur-xl" />
-                      <motion.div
-                        initial={{ scale: 0.78, opacity: 0.95 }}
-                        animate={{ scale: 2.15, opacity: 0 }}
-                        transition={{ duration: 1.15, repeat: 2 }}
-                        className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-accent"
-                      />
-                      <motion.div
-                        initial={{ scale: 0.88, opacity: 0.85 }}
-                        animate={{ scale: 1.75, opacity: 0 }}
-                        transition={{ duration: 1.15, delay: 0.25, repeat: 2 }}
-                        className="pointer-events-none absolute inset-0 rounded-2xl border border-accent"
-                      />
-                      <motion.span
-                        initial={{ opacity: 0, y: 6, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        className="pointer-events-none absolute -top-7 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent px-2.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-[#14151a] shadow-[0_0_16px_rgba(244,156,59,0.65)]"
-                      >
-                        {upgradedBadgeLabel}
-                      </motion.span>
-                    </>
-                  )}
+/* ── Nodo circular ───────────────────────────────────────────────────────── */
 
-                  {isNewlyUnlockedChild && !isRecentlyUpgraded && (
-                    <motion.span
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="pointer-events-none absolute -top-6 left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full border border-accent/80 bg-base/95 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-accent shadow-[0_0_12px_rgba(244,156,59,0.35)]"
-                    >
-                      Desbloqueada
-                    </motion.span>
-                  )}
+function SkillNode({
+  skill,
+  pos,
+  size,
+  labelPx,
+  derived,
+  delay,
+  dimmed,
+  hovered,
+  selected,
+  recentlyUpgraded,
+  recentlyUpgradedLevel,
+  newlyUnlocked,
+  onHover,
+  onSelect,
+}: {
+  skill: Skill;
+  pos: Pt;
+  size: number;
+  labelPx: number;
+  derived: DerivedSkillStatus;
+  delay: number;
+  dimmed: boolean;
+  hovered: boolean;
+  selected: boolean;
+  recentlyUpgraded: boolean;
+  recentlyUpgradedLevel: SkillLevel | null;
+  newlyUnlocked: boolean;
+  onHover: (id: string | null) => void;
+  onSelect: (id: string) => void;
+}) {
+  const Icon = SKILL_ICONS[skill.id] ?? BRANCH_ICONS[skill.branch];
+  const major = skill.tier !== 2;
+  const { status, level } = derived;
+  const learned = status === 'learned';
+  const rusty = status === 'rusty';
+  const available = status === 'available';
+  const locked = status === 'locked';
 
-                  <motion.button
-                    type="button"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.97 }}
-                    onMouseEnter={() => setHoveredId(skill.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    onClick={() => onSelectSkill(skill.id)}
-                    className={`relative flex min-w-[126px] flex-col items-center gap-1 rounded-2xl border px-3 py-2.5 text-center transition ${borderClass} ${
-                      isRecentlyUpgraded ? 'level-up-amber-glow border-accent' : ''
-                    } ${
-                      isSelected && !isRecentlyUpgraded
-                        ? 'ring-2 ring-accent ring-offset-2 ring-offset-base'
-                        : ''
-                    }`}
-                  >
-                    {/* Badge Oxidada */}
+  const circleStyle: CSSProperties = learned
+    ? {
+        background: 'radial-gradient(circle at 34% 30%, #ffd9a8 0%, #f49c3b 52%, #c9731f 100%)',
+        boxShadow:
+          level === 3
+            ? '0 0 0 1px rgba(247,242,236,0.7), 0 0 26px rgba(244,156,59,0.75), 0 0 60px rgba(244,156,59,0.35)'
+            : '0 0 0 1px rgba(247,242,236,0.45), 0 0 20px rgba(244,156,59,0.55), 0 0 44px rgba(244,156,59,0.22)',
+        color: PALETTE.bg,
+      }
+    : available
+      ? { background: 'rgba(20,21,26,0.92)', border: `2px solid ${PALETTE.accent}`, color: PALETTE.accent }
+      : rusty
+        ? { background: 'rgba(20,21,26,0.9)', border: `2px solid ${PALETTE.danger}`, color: PALETTE.danger }
+        : {
+            background: 'rgba(20,21,26,0.55)',
+            border: '1px solid rgba(123,135,148,0.45)',
+            color: 'rgba(123,135,148,0.85)',
+          };
+
+  const upgradedBadgeLabel =
+    (recentlyUpgradedLevel ?? level) === 3 ? '★ MAESTRÍA NV.3' : `¡LEVEL UP! NV.${recentlyUpgradedLevel ?? level}`;
+  const iconSize = Math.round(size * 0.4);
+  const stateLabel = locked
+    ? 'Bloqueada'
+    : available
+      ? 'Disponible'
+      : rusty
+        ? `Oxidada · Nv.${level}`
+        : `Nv.${level}`;
+
+  return (
+    <div
+      className="absolute"
+      style={{ left: pos.x, top: pos.y, width: size, height: size, marginLeft: -size / 2, marginTop: -size / 2, zIndex: hovered ? 30 : 20 }}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.45 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay, duration: 0.45, ease: STUDIO_EASE }}
+        className="relative h-full w-full transition-opacity duration-300"
+        style={{ opacity: dimmed ? 0.42 : 1 }}
+      >
+        {/* Doble anillo exterior en T1 / T3 */}
+        {major && (
+          <>
+            <span
+              className="pointer-events-none absolute rounded-full"
+              style={{ inset: -6, border: `1px solid ${learned ? 'rgba(244,156,59,0.55)' : 'rgba(247,242,236,0.16)'}` }}
+            />
+            <span
+              className="pointer-events-none absolute rounded-full"
+              style={{ inset: -12, border: `1px solid ${learned ? 'rgba(244,156,59,0.25)' : 'rgba(247,242,236,0.07)'}` }}
+            />
+          </>
+        )}
+
+        {recentlyUpgraded && (
+          <>
+            <motion.span
+              initial={{ scale: 0.8, opacity: 0.95 }}
+              animate={{ scale: 2.2, opacity: 0 }}
+              transition={{ duration: 1.15, repeat: 2 }}
+              className="pointer-events-none absolute inset-0 rounded-full border-2 border-accent"
+            />
+            <motion.span
+              initial={{ opacity: 0, y: 6, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full bg-accent px-2.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-[#14151a] shadow-[0_0_16px_rgba(244,156,59,0.65)]"
+              style={{ bottom: `calc(100% + ${major ? 18 : 10}px)` }}
+            >
+              {upgradedBadgeLabel}
+            </motion.span>
+          </>
+        )}
+
+        {newlyUnlocked && !recentlyUpgraded && (
+          <motion.span
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="pointer-events-none absolute left-1/2 z-30 -translate-x-1/2 whitespace-nowrap rounded-full border border-accent/80 bg-base/95 px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-accent shadow-[0_0_12px_rgba(244,156,59,0.35)]"
+            style={{ bottom: `calc(100% + ${major ? 18 : 10}px)` }}
+          >
+            Desbloqueada
+          </motion.span>
+        )}
+
+        <button
+          type="button"
+          onMouseEnter={() => onHover(skill.id)}
+          onMouseLeave={() => onHover(null)}
+          onFocus={() => onHover(skill.id)}
+          onBlur={() => onHover(null)}
+          onClick={() => onSelect(skill.id)}
+          aria-label={`${skill.word} · ${stateLabel}`}
+          className={`relative flex h-full w-full items-center justify-center rounded-full transition-transform duration-200 hover:scale-[1.07] active:scale-95 ${
+            available ? 'animate-node-pulse' : ''
+          } ${rusty ? 'animate-rust-flicker' : ''} ${recentlyUpgraded ? 'level-up-amber-glow' : ''} ${
+            selected ? 'outline-2 outline-offset-4 outline-ink/80' : ''
+          }`}
+          style={circleStyle}
+        >
+          <Icon style={{ width: iconSize, height: iconSize }} strokeWidth={learned ? 2.2 : 1.8} />
+        </button>
+
+        {/* Badges */}
+        {locked && (
+          <span
+            className="pointer-events-none absolute flex items-center justify-center rounded-full border border-secondary/60 bg-base"
+            style={{ width: 20, height: 20, right: -3, bottom: -3 }}
+          >
+            <Lock className="h-2.5 w-2.5 text-secondary" />
+          </span>
+        )}
+
+        {available && (
+          <span className="pointer-events-none absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border border-accent/70 bg-base px-1.5 font-mono text-[9px] font-bold leading-[14px] text-accent">
+            T{skill.tier}
+          </span>
+        )}
+
+        {(learned || rusty) && (
+          <span
+            className={`pointer-events-none absolute -bottom-2 left-1/2 flex -translate-x-1/2 items-center gap-[3px] rounded-full border bg-base px-1.5 py-[3px] ${
+              rusty ? 'border-danger/70' : 'border-accent/70'
+            }`}
+          >
+            {[1, 2, 3].map((n) => (
+              <span
+                key={n}
+                className="h-[5px] w-[5px] rounded-full"
+                style={{
+                  background: n <= level ? (rusty ? PALETTE.danger : LEVEL_COLORS[3]) : PALETTE.surface,
+                }}
+              />
+            ))}
+          </span>
+        )}
+
+        {rusty && (
+          <span
+            className="pointer-events-none absolute flex items-center justify-center rounded-full border border-danger/70 bg-base"
+            style={{ width: 20, height: 20, right: -4, top: -4 }}
+          >
+            <AlertTriangle className="h-2.5 w-2.5 text-danger" />
+          </span>
+        )}
+
+        {/* Nombre */}
+        <div
+          className="pointer-events-none absolute left-1/2 top-full -translate-x-1/2 whitespace-nowrap text-center"
+          style={{ marginTop: major ? 18 : 14 }}
+        >
+          <div
+            className={`font-display font-bold tracking-wide ${locked ? 'text-secondary' : 'text-ink'}`}
+            style={{ fontSize: labelPx, textShadow: '0 1px 8px rgba(20,21,26,0.95)' }}
+          >
+            {skill.word}
+          </div>
+          <div
+            className="font-mono"
+            style={{ fontSize: Math.round(labelPx * 0.76), color: rusty ? PALETTE.danger : learned ? PALETTE.accent : PALETTE.secondary }}
+          >
+            {stateLabel}
+          </div>
+        </div>
+
+        {/* Tooltip de requisito (bloqueada) */}
+        <AnimatePresence>
+          {hovered && locked && derived.missingParents.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 4 }}
+              transition={{ duration: 0.16 }}
+              className="pointer-events-none absolute left-1/2 z-40 -translate-x-1/2 whitespace-nowrap rounded-lg border border-surface bg-base/95 px-2.5 py-1.5 text-[11px] text-ink shadow-xl backdrop-blur-md"
+              style={{ bottom: `calc(100% + ${major ? 18 : 10}px)` }}
+            >
+              <span className="mr-1 inline-flex items-center gap-1 text-secondary">
+                <Lock className="h-3 w-3" /> Requiere:
+              </span>
+              <span className="font-semibold text-accent">
+                {derived.missingParents.map((m) => m.word).join(' + ')}
+              </span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
+  );
+}
+
+/* ── Drawer lateral (portal, no empuja el lienzo) ────────────────────────── */
+
+function SkillDrawer({
+  skill,
+  derived,
+  record,
+  side,
+  onClose,
+  onSelectSkill,
+  onProveSkill,
+  onStartDuelWithSkill,
+}: {
+  skill: Skill | null;
+  derived: DerivedSkillStatus | null;
+  record: UserSkill | undefined;
+  side: 'left' | 'right';
+  onClose: () => void;
+  onSelectSkill: (skillId: string | null) => void;
+  onProveSkill: (skill: Skill, targetLevel: Exclude<SkillLevel, 0>) => void;
+  onStartDuelWithSkill: (skillId: string) => void;
+}) {
+  return (
+    <AnimatePresence>
+      {skill && derived && (
+        <>
+          {/* Scrim sólo en móvil/tablet */}
+          <motion.button
+            key="drawer-scrim"
+            type="button"
+            aria-label="Cerrar panel de skill"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 z-[43] bg-base/60 backdrop-blur-[2px] lg:hidden"
+          />
+          <motion.aside
+            key={`drawer-${skill.id}`}
+            initial={{ opacity: 0, x: side === 'right' ? 24 : -24, y: 0 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, x: side === 'right' ? 24 : -24 }}
+            transition={{ duration: 0.26, ease: STUDIO_EASE }}
+            className={`glass-panel fixed inset-x-3 bottom-3 z-[44] flex max-h-[78dvh] flex-col justify-between gap-4 overflow-y-auto rounded-2xl p-5 shadow-2xl lg:inset-x-auto lg:bottom-4 lg:top-20 lg:max-h-none lg:w-[400px] ${
+              side === 'right' ? 'lg:right-4' : 'lg:left-4'
+            }`}
+          >
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="rounded-md border border-surface bg-surface/50 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-secondary">
+                      {BRANCH_META.find((b) => b.id === skill.branch)?.label} · Tier {skill.tier}
+                    </span>
                     {derived.rusty && (
-                      <span className="absolute -top-2.5 right-2 inline-flex items-center gap-1 rounded-full border border-danger/70 bg-base px-2 py-0.5 font-mono text-[9px] font-bold uppercase tracking-wider text-danger">
-                        <AlertTriangle className="h-2.5 w-2.5" />
+                      <span className="rounded-md border border-danger/60 bg-danger/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-danger">
                         Oxidada
                       </span>
                     )}
-
-                    {/* Indicador de estado / estrellas */}
-                    <div className="flex items-center gap-1">
-                      {derived.status === 'locked' && (
-                        <Lock className="h-3.5 w-3.5 text-secondary" />
-                      )}
-                      {derived.status === 'available' && (
-                        <Sparkles className="h-3.5 w-3.5 text-accent" />
-                      )}
-                      {derived.level >= 1 && (
-                        <div className="flex items-center gap-0.5">
-                          {[1, 2, 3].map((idx) => (
-                            <Star
-                              key={idx}
-                              className="h-3 w-3"
-                              style={{
-                                color: idx <= derived.level ? levelColor : PALETTE.surface,
-                                fill: idx <= derived.level ? levelColor : 'transparent',
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-                      <span className="font-mono text-[10px] text-secondary">T{skill.tier}</span>
-                    </div>
-
-                    <span className="font-display text-sm font-bold tracking-wide text-ink">
-                      {skill.word}
-                    </span>
-
-                    <span
-                      className="font-mono text-[10px]"
-                      style={{
-                        color:
-                          derived.status === 'rusty'
-                            ? PALETTE.danger
-                            : derived.level >= 1
-                              ? levelColor
-                              : PALETTE.secondary,
-                      }}
-                    >
-                      {derived.status === 'available'
-                        ? 'Disponible'
-                        : derived.status === 'locked'
-                          ? 'Bloqueada'
-                          : `Nv.${derived.level}`}
-                    </span>
-                  </motion.button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Panel Lateral (Drawer) */}
-        <AnimatePresence mode="wait">
-          {selectedSkill && selectedDerived && (
-            <motion.aside
-              key={selectedSkill.id}
-              initial={{ opacity: 0, x: 18 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 18 }}
-              transition={{ duration: 0.2 }}
-              className="glass-panel flex flex-col justify-between gap-4 rounded-2xl p-5 lg:col-span-5 xl:col-span-4"
-            >
-              <div className="space-y-4">
-                {/* Cabecera del nodo */}
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="mb-1 flex flex-wrap items-center gap-2">
-                      <span className="rounded-md border border-surface bg-surface/50 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-secondary">
-                        {BRANCH_META.find((b) => b.id === selectedSkill.branch)?.label} · Tier{' '}
-                        {selectedSkill.tier}
-                      </span>
-                      {selectedDerived.rusty && (
-                        <span className="rounded-md border border-danger/60 bg-danger/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase text-danger">
-                          Oxidada
-                        </span>
-                      )}
-                    </div>
-                    <h2 className="font-display text-2xl font-bold tracking-wide text-ink">
-                      <ScrambleText text={selectedSkill.word} triggerKey={selectedSkill.id} />
-                    </h2>
                   </div>
+                  <h2 className="font-display text-2xl font-bold tracking-wide text-ink">
+                    <ScrambleText text={skill.word} triggerKey={skill.id} />
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Cerrar panel de skill"
+                  className="rounded-lg border border-surface p-1.5 text-secondary transition hover:border-secondary hover:text-ink"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
 
+              {/* Barra de maestría */}
+              <div className="rounded-xl border border-surface/80 bg-base/60 p-3">
+                <div className="mb-1.5 flex items-center justify-between text-xs">
+                  <span className="font-mono font-semibold" style={{ color: LEVEL_COLORS[derived.level] }}>
+                    {LEVEL_NAMES[derived.level]}
+                  </span>
+                  <span className="font-mono text-secondary">{derived.level}/3</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[1, 2, 3].map((step) => (
+                    <div
+                      key={step}
+                      className="h-1.5 rounded-full transition-colors"
+                      style={{
+                        backgroundColor: step <= derived.level ? LEVEL_COLORS[derived.level] : PALETTE.surface,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Definición & Tip */}
+              <div className="space-y-2.5 text-sm">
+                <div>
+                  <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-secondary">Definición</p>
+                  <p className="leading-relaxed text-ink/95">{skill.definition}</p>
+                </div>
+                <div className="rounded-xl border border-surface/80 bg-surface/25 p-3">
+                  <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-accent">Tip de Contexto</p>
+                  <p className="text-xs leading-relaxed text-ink/85">{skill.contextTip}</p>
+                </div>
+                <div>
+                  <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary">
+                    Ejemplos de uso vivo
+                  </p>
+                  <ul className="space-y-1.5 text-xs leading-relaxed text-secondary">
+                    {skill.examples.map((ex) => (
+                      <li key={ex} className="rounded-lg border border-surface/60 bg-base/50 p-2.5 text-ink/85">
+                        “{ex}”
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Tu Mejor Frase */}
+              {derived.level >= 1 && (
+                <div className="rounded-xl border border-accent/45 bg-accent/10 p-3.5">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-accent">
+                      <MessageSquareQuote className="h-3.5 w-3.5" />
+                      Tu Mejor Frase
+                    </span>
+                    {record?.bestScore != null && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-base/75 px-2 py-0.5 font-mono text-[11px] font-semibold text-ink">
+                        <Award className="h-3 w-3 text-accent" />
+                        {record.bestScore}/100
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs italic leading-relaxed text-ink">
+                    “{record?.bestSentence || skill.examples[0]}”
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Botones según estado */}
+            <div className="space-y-2 border-t border-surface/80 pt-3">
+              {derived.status === 'locked' && (
+                <div className="space-y-2">
                   <button
                     type="button"
-                    onClick={() => onSelectSkill(null)}
-                    aria-label="Cerrar panel de skill"
-                    className="rounded-lg border border-surface p-1.5 text-secondary transition hover:border-secondary hover:text-ink"
+                    disabled
+                    className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-surface bg-surface/40 px-4 py-2.5 text-xs font-semibold text-ink/80"
                   >
-                    <X className="h-4 w-4" />
+                    <Lock className="h-4 w-4" />
+                    <span>Desbloquea primero: {derived.missingParents.map((p) => p.word).join(', ')}</span>
                   </button>
-                </div>
-
-                {/* Barra de maestría */}
-                <div className="rounded-xl border border-surface/80 bg-base/60 p-3">
-                  <div className="mb-1.5 flex items-center justify-between text-xs">
-                    <span
-                      className="font-mono font-semibold"
-                      style={{ color: LEVEL_COLORS[selectedDerived.level] }}
-                    >
-                      {LEVEL_NAMES[selectedDerived.level]}
-                    </span>
-                    <span className="font-mono text-secondary">{selectedDerived.level}/3</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {[1, 2, 3].map((step) => (
-                      <div
-                        key={step}
-                        className="h-1.5 rounded-full transition-colors"
-                        style={{
-                          backgroundColor:
-                            step <= selectedDerived.level
-                              ? LEVEL_COLORS[selectedDerived.level]
-                              : PALETTE.surface,
-                        }}
-                      />
+                  <div className="flex flex-wrap gap-1.5">
+                    {derived.missingParents.map((parent) => (
+                      <button
+                        key={parent.id}
+                        type="button"
+                        onClick={() => onSelectSkill(parent.id)}
+                        className="rounded-lg border border-secondary/50 px-2.5 py-1 font-mono text-[11px] text-ink transition hover:border-accent hover:text-accent"
+                      >
+                        Ir a {parent.word} →
+                      </button>
                     ))}
                   </div>
                 </div>
+              )}
 
-                {/* Definición & Tip */}
-                <div className="space-y-2.5 text-sm">
-                  <div>
-                    <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-secondary">
-                      Definición
-                    </p>
-                    <p className="leading-relaxed text-ink/95">{selectedSkill.definition}</p>
-                  </div>
+              {derived.status === 'available' && (
+                <button
+                  type="button"
+                  onClick={() => onProveSkill(skill, 1)}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 font-display text-xs font-bold tracking-wider text-base transition hover:brightness-110"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  PROVE SKILL — DESBLOQUEAR NV. 1
+                </button>
+              )}
 
-                  <div className="rounded-xl border border-surface/80 bg-surface/25 p-3">
-                    <p className="mb-1 font-mono text-[10px] uppercase tracking-wider text-accent">
-                      Tip de Contexto
-                    </p>
-                    <p className="text-xs leading-relaxed text-ink/85">{selectedSkill.contextTip}</p>
-                  </div>
-
-                  <div>
-                    <p className="mb-1.5 font-mono text-[10px] uppercase tracking-wider text-secondary">
-                      Ejemplos de uso vivo
-                    </p>
-                    <ul className="space-y-1.5 text-xs leading-relaxed text-secondary">
-                      {selectedSkill.examples.map((ex) => (
-                        <li key={ex} className="rounded-lg border border-surface/60 bg-base/50 p-2.5 text-ink/85">
-                          “{ex}”
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-
-                {/* Tu Mejor Frase (cuando level >= 1) */}
-                {selectedDerived.level >= 1 && (
-                  <div className="rounded-xl border border-accent/45 bg-accent/10 p-3.5">
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-bold uppercase tracking-wider text-accent">
-                        <MessageSquareQuote className="h-3.5 w-3.5" />
-                        Tu Mejor Frase
-                      </span>
-                      {selectedRecord?.bestScore != null && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-base/75 px-2 py-0.5 font-mono text-[11px] font-semibold text-ink">
-                          <Award className="h-3 w-3 text-accent" />
-                          {selectedRecord.bestScore}/100
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs italic leading-relaxed text-ink">
-                      “{selectedRecord?.bestSentence || selectedSkill.examples[0]}”
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Botones según estado */}
-              <div className="space-y-2 border-t border-surface/80 pt-3">
-                {selectedDerived.status === 'locked' && (
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      disabled
-                      className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl border border-surface bg-surface/40 px-4 py-2.5 text-xs font-semibold text-ink/80"
-                    >
-                      <Lock className="h-4 w-4" />
-                      <span>
-                        Desbloquea primero:{' '}
-                        {selectedDerived.missingParents.map((p) => p.word).join(', ')}
-                      </span>
-                    </button>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedDerived.missingParents.map((parent) => (
-                        <button
-                          key={parent.id}
-                          type="button"
-                          onClick={() => onSelectSkill(parent.id)}
-                          className="rounded-lg border border-secondary/50 px-2.5 py-1 font-mono text-[11px] text-ink transition hover:border-accent hover:text-accent"
-                        >
-                          Ir a {parent.word} →
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedDerived.status === 'available' && (
+              {(derived.level === 1 || derived.level === 2) && !derived.rusty && (
+                <>
                   <button
                     type="button"
-                    onClick={() => onProveSkill(selectedSkill, 1)}
+                    onClick={() => onProveSkill(skill, getNextSoloTargetLevel(derived.level, false))}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 font-display text-xs font-bold tracking-wider text-base transition hover:brightness-110"
                   >
                     <Sparkles className="h-4 w-4" />
-                    PROVE SKILL — DESBLOQUEAR NV. 1
+                    UPGRADE SKILL (SOLO) · NV. {derived.level + 1}
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => onStartDuelWithSkill(skill.id)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-secondary/60 bg-surface/35 px-4 py-2.5 font-display text-xs font-bold tracking-wider text-ink transition hover:border-accent hover:text-accent"
+                  >
+                    <Swords className="h-4 w-4" />
+                    MEJORAR EN DUELO 1v1
+                  </button>
+                </>
+              )}
 
-                {(selectedDerived.level === 1 || selectedDerived.level === 2) &&
-                  !selectedDerived.rusty && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onProveSkill(
-                            selectedSkill,
-                            getNextSoloTargetLevel(selectedDerived.level, false),
-                          )
-                        }
-                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 font-display text-xs font-bold tracking-wider text-base transition hover:brightness-110"
-                      >
-                        <Sparkles className="h-4 w-4" />
-                        UPGRADE SKILL (SOLO) · NV. {selectedDerived.level + 1}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onStartDuelWithSkill(selectedSkill.id)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-secondary/60 bg-surface/35 px-4 py-2.5 font-display text-xs font-bold tracking-wider text-ink transition hover:border-accent hover:text-accent"
-                      >
-                        <Swords className="h-4 w-4" />
-                        MEJORAR EN DUELO 1v1
-                      </button>
-                    </>
-                  )}
-
-                {(selectedDerived.rusty || selectedDerived.level === 3) && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onProveSkill(
-                          selectedSkill,
-                          getNextSoloTargetLevel(selectedDerived.level, selectedDerived.rusty),
-                        )
-                      }
-                      className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-display text-xs font-bold tracking-wider transition ${
-                        selectedDerived.rusty
-                          ? 'bg-danger text-ink hover:brightness-110'
-                          : 'border border-accent/60 bg-accent/15 text-accent hover:bg-accent/25'
-                      }`}
-                    >
-                      <Wrench className="h-4 w-4" />
-                      REPARAR / RE-ENTRENAR SKILL
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onStartDuelWithSkill(selectedSkill.id)}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-secondary/60 bg-surface/35 px-4 py-2 font-display text-xs font-bold tracking-wider text-ink transition hover:border-accent hover:text-accent"
-                    >
-                      <Swords className="h-4 w-4" />
-                      LLEVAR A DUELO 1v1
-                    </button>
-                  </>
-                )}
-              </div>
-            </motion.aside>
-          )}
-        </AnimatePresence>
-      </div>
-    </motion.section>
+              {(derived.rusty || derived.level === 3) && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onProveSkill(skill, getNextSoloTargetLevel(derived.level, derived.rusty))}
+                    className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 font-display text-xs font-bold tracking-wider transition ${
+                      derived.rusty
+                        ? 'bg-danger text-ink hover:brightness-110'
+                        : 'border border-accent/60 bg-accent/15 text-accent hover:bg-accent/25'
+                    }`}
+                  >
+                    <Wrench className="h-4 w-4" />
+                    REPARAR / RE-ENTRENAR SKILL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onStartDuelWithSkill(skill.id)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-secondary/60 bg-surface/35 px-4 py-2 font-display text-xs font-bold tracking-wider text-ink transition hover:border-accent hover:text-accent"
+                  >
+                    <Swords className="h-4 w-4" />
+                    LLEVAR A DUELO 1v1
+                  </button>
+                </>
+              )}
+            </div>
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
   );
 }

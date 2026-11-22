@@ -1,9 +1,9 @@
-import { useState, type MouseEvent } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useMotionTemplate, useMotionValue, useSpring } from 'framer-motion';
 import { Compass, Dices, Sparkles, Swords } from 'lucide-react';
 import { LEVEL_COLORS, type Skill, type SkillLevel, type UserSkill } from '../../../shared/types.ts';
 import { BRANCH_META } from '../data/fallbackSkills.ts';
 import { ScrambleText } from '../components/ScrambleText.tsx';
+import { VIEW_TRANSITION, VIEW_VARIANTS } from '../utils/motion.ts';
 import { getNextSoloTargetLevel, getSkillNodeStatus } from '../utils/textValidation.ts';
 
 export function ExpeditionView({
@@ -23,31 +23,49 @@ export function ExpeditionView({
   onProveSkill: (skill: Skill, targetLevel: Exclude<SkillLevel, 0>) => void;
   onDuelWithSkill: (skillId: string) => void;
 }) {
-  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  const tiltXRaw = useMotionValue(0);
+  const tiltYRaw = useMotionValue(0);
+  const glowXRaw = useMotionValue(50);
+  const glowYRaw = useMotionValue(50);
+
+  const rotateX = useSpring(tiltXRaw, { stiffness: 220, damping: 24, mass: 0.6 });
+  const rotateY = useSpring(tiltYRaw, { stiffness: 220, damping: 24, mass: 0.6 });
+  const glowX = useSpring(glowXRaw, { stiffness: 200, damping: 26 });
+  const glowY = useSpring(glowYRaw, { stiffness: 200, damping: 26 });
+  const specularBg = useMotionTemplate`radial-gradient(460px circle at ${glowX}% ${glowY}%, rgba(244, 156, 59, 0.11), rgba(247, 242, 236, 0.04) 38%, transparent 70%)`;
+
   const derived = getSkillNodeStatus(currentSkill, userSkills, skills);
   const branchLabel =
     BRANCH_META.find((b) => b.id === currentSkill.branch)?.label ?? currentSkill.branch;
 
-  const handleMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const px = (event.clientX - rect.left) / rect.width - 0.5;
     const py = (event.clientY - rect.top) / rect.height - 0.5;
-    setTilt({
-      rx: Number((-py * 6).toFixed(2)),
-      ry: Number((px * 6).toFixed(2)),
-    });
+    tiltXRaw.set(-py * 5.5);
+    tiltYRaw.set(px * 5.5);
+    glowXRaw.set((px + 0.5) * 100);
+    glowYRaw.set((py + 0.5) * 100);
+  };
+
+  const handleMouseLeave = () => {
+    tiltXRaw.set(0);
+    tiltYRaw.set(0);
+    glowXRaw.set(50);
+    glowYRaw.set(50);
   };
 
   return (
     <motion.section
       key="expedition-view"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -12 }}
-      transition={{ duration: 0.25 }}
-      className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-4 pb-14 pt-28 sm:px-6 md:pt-24"
+      variants={VIEW_VARIANTS}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      transition={VIEW_TRANSITION}
+      className="mx-auto flex min-h-dvh max-w-4xl flex-col justify-center px-4 pb-8 pt-28 sm:px-6 md:pt-20"
     >
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-4 flex items-center justify-between">
         <div className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.16em] text-secondary">
           <Compass className="h-4 w-4 text-accent" />
           Expedición Aleatoria · Descubrimiento
@@ -58,17 +76,25 @@ export function ExpeditionView({
       {/* Tarjeta holográfica central */}
       <motion.div
         key={rollKey}
-        initial={{ opacity: 0.5, scale: 0.98 }}
+        initial={{ opacity: 0.45, scale: 0.98 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.25 }}
+        transition={{ duration: 0.28 }}
         onMouseMove={handleMouseMove}
-        onMouseLeave={() => setTilt({ rx: 0, ry: 0 })}
+        onMouseLeave={handleMouseLeave}
         style={{
-          transform: `perspective(1000px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
-          transition: 'transform 160ms ease-out',
+          rotateX,
+          rotateY,
+          transformPerspective: 1000,
+          transformStyle: 'preserve-3d',
         }}
-        className="glass-panel relative overflow-hidden rounded-3xl border border-accent/40 p-6 shadow-[0_0_45px_rgba(244,156,59,0.12)] sm:p-8"
+        className="glass-panel relative overflow-hidden rounded-3xl border border-accent/40 p-6 shadow-[0_0_45px_rgba(244,156,59,0.12)] sm:p-7"
       >
+        {/* Reflejo especular reactivo al cursor */}
+        <motion.div
+          className="pointer-events-none absolute inset-0"
+          style={{ background: specularBg }}
+        />
+
         {/* Reflejo holográfico sutil */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="animate-holo-sheen absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-ink/5 to-transparent" />

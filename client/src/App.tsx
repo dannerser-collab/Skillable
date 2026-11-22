@@ -62,6 +62,7 @@ function fireMasteryConfetti() {
 export default function App() {
   const initialRoute = useState(getInitialRoute)[0];
   const [activeView, setActiveView] = useState<AppView>(initialRoute.view);
+  const [hubExpanded, setHubExpanded] = useState(false);
   const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(
     initialRoute.pendingRoomCode,
   );
@@ -110,6 +111,10 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeView]);
+
   const navigateTo = useCallback((view: AppView) => {
     setActiveView(view);
     if (typeof window !== 'undefined') {
@@ -120,6 +125,11 @@ export default function App() {
       window.history.replaceState(null, '', nextUrl);
     }
   }, []);
+
+  const handleReturnToHub = useCallback(() => {
+    setHubExpanded(true);
+    navigateTo('inicio');
+  }, [navigateTo]);
 
   const handleOpenRandomExpedition = useCallback(() => {
     const picked = pickRandomSkill(skills, expeditionSkillId);
@@ -207,30 +217,34 @@ export default function App() {
     skills.find((s) => s.id === expeditionSkillId) ?? skills[0];
 
   return (
-    <div className="relative min-h-screen bg-base text-ink selection:bg-accent selection:text-base">
+    <div className="relative min-h-dvh bg-base text-ink selection:bg-accent selection:text-base">
       <InteractiveBackground />
 
-      <Navbar
-        activeView={activeView}
-        onNavigate={navigateTo}
-        nickname={profile.nickname}
-        onChangeNickname={setNickname}
-        elo={profile.elo}
-        unlockedCount={unlockedCount}
-        totalSkills={skills.length}
-        onApplyPreset={applyDemoPreset}
-      />
+      <AnimatePresence>
+        {activeView !== 'inicio' && (
+          <Navbar
+            key="top-navbar"
+            activeView={activeView}
+            onNavigate={navigateTo}
+            onReturnToHub={handleReturnToHub}
+          />
+        )}
+      </AnimatePresence>
 
-      <main className="relative z-10 min-h-screen">
+      <main className="relative z-10 min-h-dvh">
         <AnimatePresence mode="wait">
           {activeView === 'inicio' && (
             <HomeView
               key="inicio"
+              expanded={hubExpanded}
+              onExpand={() => setHubExpanded(true)}
+              onCollapse={() => setHubExpanded(false)}
               nickname={profile.nickname}
               onChangeNickname={setNickname}
               elo={profile.elo}
               unlockedCount={unlockedCount}
               totalSkills={skills.length}
+              onApplyPreset={applyDemoPreset}
               onExploreTree={() => navigateTo('arbol')}
               onRandomExpedition={handleOpenRandomExpedition}
               onEnterArena={() => navigateTo('arena')}
